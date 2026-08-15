@@ -1,6 +1,6 @@
 /**
  * LyraScore 主应用调度中心 (Main Application Controller)
- * 具备全局容错保护、离线数据库自动挂载与乐谱库/演奏台切换
+ * 具备全局容错保护、系统侧滑返回拦截与乐谱库/专注阅读台切换
  */
 
 import './styles/base.css';
@@ -27,6 +27,7 @@ class LyraScoreApp {
 
     this.setupGlobalErrorHandlers();
     this.init();
+    this.setupBackNavigation();
   }
 
   setupGlobalErrorHandlers() {
@@ -38,13 +39,28 @@ class LyraScoreApp {
     });
   }
 
+  setupBackNavigation() {
+    // 拦截 Android 系统侧滑返回与物理返回键
+    window.onAndroidBackPressed = () => {
+      if (appState.get('currentView') === 'reader') {
+        this.showLibrary();
+        return true;
+      }
+      return false;
+    };
+
+    window.addEventListener('popstate', (e) => {
+      if (appState.get('currentView') === 'reader') {
+        this.showLibrary();
+      }
+    });
+  }
+
   async init() {
     try {
-      // 1. 初始化用户偏好主题 (默认羊皮纸护眼色)
       const savedTheme = localStorage.getItem('lyra_theme') || 'parchment';
       document.documentElement.setAttribute('data-theme', savedTheme);
 
-      // 2. 构建 DOM 骨架
       this.appEl.innerHTML = `
         <div id="libraryRoot" class="view-layer active"></div>
         <div id="viewerRoot" class="view-layer hidden"></div>
@@ -55,7 +71,6 @@ class LyraScoreApp {
       this.viewerContainer = document.getElementById('viewerRoot');
       this.modalContainer = document.getElementById('modalRoot');
 
-      // 3. 初始化弹窗管理器
       this.modal = new ScoreModal(this.modalContainer, async (savedScore) => {
         await this.library.loadScores();
         if (appState.get('currentScore')?.id === savedScore.id) {
@@ -63,14 +78,12 @@ class LyraScoreApp {
         }
       });
 
-      // 4. 初始化乐谱库组件
       this.library = new ScoreLibrary(this.libraryContainer, {
         onOpenScore: (score) => this.openScoreReader(score),
         onEditScore: (score) => this.modal.open(score, false),
         onCopyScore: (score) => this.modal.open(score, true)
       });
 
-      // 5. 初始化乐谱阅读器组件
       this.viewer = new ScoreViewer(this.viewerContainer, {
         onBackToLibrary: () => this.showLibrary(),
         onEditScore: (score) => this.modal.open(score, false),
@@ -99,10 +112,18 @@ class LyraScoreApp {
     this.viewerContainer.classList.add('active');
 
     appState.set({ currentView: 'reader' });
+    try {
+      history.pushState({ view: 'reader' }, '');
+    } catch (_) {}
+
     await this.viewer.openScore(score);
   }
 
   showLibrary() {
+    if (this.viewer) {
+      this.viewer.closeViewer();
+    }
+
     this.viewerContainer.classList.remove('active');
     this.viewerContainer.classList.add('hidden');
 

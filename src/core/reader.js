@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、手势穿透、双指平滑缩放与带弹性阻尼感的手势翻页引擎
+ * 具备防循环闪烁保护、手势穿透、双指平滑缩放与支持上下/左右手势翻页的弹性阻尼引擎
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -62,7 +62,7 @@ export class ScoreReader {
     if (!vp) return;
 
     vp.addEventListener('touchstart', (e) => {
-      if (appState.get('isPenActive')) return; // 手写笔模式下不拦截
+      if (appState.get('isPenActive')) return; // 手写笔模式下由 Canvas 独立接管
 
       if (e.touches.length === 2) {
         isMultiTouch = true;
@@ -100,10 +100,17 @@ export class ScoreReader {
         const deltaX = currentX - startX;
         const deltaY = currentY - startY;
 
-        // 横向滑动手势带阻尼位移 (阻尼系数 0.35)
-        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 15) {
-          const dampedX = deltaX * 0.35;
-          this.container.style.transform = `scale(${this.zoomScale}) translateX(${dampedX}px)`;
+        // 手指滑动时带有自然弹性阻尼跟随 (阻尼系数 0.32)
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          if (Math.abs(deltaX) > 12) {
+            const dampedX = deltaX * 0.32;
+            this.container.style.transform = `scale(${this.zoomScale}) translateX(${dampedX}px)`;
+          }
+        } else {
+          if (Math.abs(deltaY) > 12) {
+            const dampedY = deltaY * 0.32;
+            this.container.style.transform = `scale(${this.zoomScale}) translateY(${dampedY}px)`;
+          }
         }
       }
     }, { passive: true });
@@ -120,30 +127,55 @@ export class ScoreReader {
         isSwiping = false;
         const deltaX = currentX - startX;
         const deltaY = currentY - startY;
-        const threshold = 55; // 触发翻页的滑动阈值
+        const threshold = 45; // 触发翻页的滑动距离阈值
 
-        this.container.style.transition = 'transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)';
+        this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
 
-        if (deltaX < -threshold) {
-          // 向左滑 -> 下一页 (阻尼滑出动效)
-          this.container.style.transform = `scale(${this.zoomScale}) translateX(-80px)`;
-          setTimeout(async () => {
-            const hasNext = await this.nextPage();
-            this.container.style.transition = 'none';
-            this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
-          }, 150);
-        } else if (deltaX > threshold) {
-          // 向右滑 -> 上一页 (阻尼滑出动效)
-          this.container.style.transform = `scale(${this.zoomScale}) translateX(80px)`;
-          setTimeout(async () => {
-            const hasPrev = await this.prevPage();
-            this.container.style.transition = 'none';
-            this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
-          }, 150);
-        } else {
-          // 未达阈值 -> 弹性回弹复位
-          this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
+        // 1. 横向滑动手势 (左滑下一页 / 右滑上一页)
+        if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+          if (deltaX < -threshold) {
+            this.container.style.transform = `scale(${this.zoomScale}) translateX(-70px)`;
+            setTimeout(async () => {
+              await this.nextPage();
+              this.container.style.transition = 'none';
+              this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
+            }, 140);
+            return;
+          } else if (deltaX > threshold) {
+            this.container.style.transform = `scale(${this.zoomScale}) translateX(70px)`;
+            setTimeout(async () => {
+              await this.prevPage();
+              this.container.style.transition = 'none';
+              this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
+            }, 140);
+            return;
+          }
+        } 
+        // 2. 垂直滑动手势 (上滑下一页 / 下滑上一页)
+        else {
+          if (deltaY < -threshold) {
+            // 向上滑 -> 下一页
+            this.container.style.transform = `scale(${this.zoomScale}) translateY(-70px)`;
+            setTimeout(async () => {
+              await this.nextPage();
+              this.container.style.transition = 'none';
+              this.container.style.transform = `scale(${this.zoomScale}) translateY(0)`;
+            }, 140);
+            return;
+          } else if (deltaY > threshold) {
+            // 向下滑 -> 上一页
+            this.container.style.transform = `scale(${this.zoomScale}) translateY(70px)`;
+            setTimeout(async () => {
+              await this.prevPage();
+              this.container.style.transition = 'none';
+              this.container.style.transform = `scale(${this.zoomScale}) translateY(0)`;
+            }, 140);
+            return;
+          }
         }
+
+        // 未达到翻页阈值 -> 弹性回弹复位
+        this.container.style.transform = `scale(${this.zoomScale}) translate(0, 0)`;
       }
     }, { passive: true });
   }

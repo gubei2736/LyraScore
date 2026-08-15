@@ -89,7 +89,6 @@ public class MainActivity extends Activity {
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("*/*");
-                // 限制支持的乐谱格式：PDF, XML, MusicXML, 图片
                 String[] mimeTypes = new String[]{
                         "application/pdf",
                         "text/xml",
@@ -140,7 +139,6 @@ public class MainActivity extends Activity {
 
             Uri[] results = null;
             if (resultCode == Activity.RESULT_OK && data != null) {
-                // 单选或多选结果处理
                 ClipData clipData = data.getClipData();
                 if (clipData != null && clipData.getItemCount() > 0) {
                     int count = clipData.getItemCount();
@@ -178,12 +176,25 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * 拦截系统侧滑手势与返回键：
+     * 若处于乐谱阅读界面，侧滑返回书架主页；若在主页，返回桌面
+     */
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
+        if (webView != null) {
+            webView.evaluateJavascript("(function(){ if (window.onAndroidBackPressed) { return window.onAndroidBackPressed(); } return false; })()", new ValueCallback<String>() {
+                @Override
+                public void onReceiveValue(String value) {
+                    if ("true".equals(value) || "\"true\"".equals(value)) {
+                        // 前端已退回到书架主页，拦截系统退出
+                        return;
+                    }
+                    MainActivity.super.onBackPressed();
+                }
+            });
+            return;
         }
+        super.onBackPressed();
     }
 }
