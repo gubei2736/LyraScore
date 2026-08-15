@@ -1,0 +1,420 @@
+/* ==========================================================================
+   LyraScore 手写笔浮动工具箱与自动翻谱控件样式
+   ========================================================================== */
+
+/* 浮动手写笔工具箱容器 */
+.floating-pen-container {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+}
+
+.pen-toolbox {
+  background-color: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-float);
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  gap: 8px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.toolbox-toggle-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26, 86, 219, 0.3);
+}
+
+.toolbox-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pen-toolbox.collapsed .toolbox-content {
+  display: none;
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 2px;
+}
+.tool-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.tool-btn.active {
+  background-color: var(--accent-light);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+.tool-btn .tool-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.tool-btn .tool-label {
+  font-size: 9px;
+  margin-top: 2px;
+}
+
+.tool-divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--border-color);
+  margin: 0 4px;
+}
+
+/* 调色盘与粗细 */
+.color-palette-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.color-dot:hover {
+  transform: scale(1.15);
+}
+.color-dot.active {
+  border-color: var(--text-primary);
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+.stroke-size-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+}
+.size-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.size-slider {
+  width: 70px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+/* 历史撤销与清空 */
+.history-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.action-btn:hover {
+  background: var(--bg-secondary);
+}
+
+/* 音乐印章面板 */
+.stamp-popover {
+  display: none;
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 340px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 14px;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 80;
+}
+.stamp-popover.open {
+  display: flex;
+}
+.stamp-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.stamp-close-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+.stamp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.stamp-item-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  gap: 4px;
+}
+.stamp-item-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--accent-light);
+}
+.stamp-symbol {
+  font-size: 22px;
+  line-height: 1;
+  font-family: serif;
+}
+.stamp-name {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ================= 自动翻谱悬浮控件 ================= */
+.floating-flip-container {
+  position: absolute;
+  top: 70px;
+  right: 20px;
+  z-index: 55;
+}
+
+.flip-bar-widget {
+  background-color: var(--bg-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  padding: 4px 10px 4px 4px;
+  gap: 10px;
+  position: relative;
+}
+.flip-bar-widget.running {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 16px rgba(26, 86, 219, 0.25);
+}
+
+.flip-main-toggle-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--bg-surface);
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.countdown-svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  transform: rotate(-90deg);
+}
+.countdown-track {
+  fill: none;
+  stroke: var(--border-color);
+  stroke-width: 3.5;
+}
+.countdown-indicator {
+  fill: none;
+  stroke: var(--accent-primary);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.1s linear;
+}
+
+.flip-icon-center {
+  font-size: 14px;
+  color: var(--accent-primary);
+  z-index: 2;
+}
+
+.flip-status-info {
+  display: flex;
+  flex-direction: column;
+}
+.flip-mode-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  cursor: pointer;
+}
+.flip-time-counter {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.flip-quick-adjust {
+  display: flex;
+  gap: 2px;
+}
+.quick-step-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.quick-step-btn:hover {
+  background: var(--bg-secondary);
+}
+
+.flip-settings-btn {
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* 翻谱设置弹窗 */
+.flip-settings-popover {
+  display: none;
+  position: absolute;
+  top: 54px;
+  right: 0;
+  width: 290px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 70;
+}
+.flip-settings-popover.open {
+  display: flex;
+}
+.settings-popover-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.setting-item.hidden {
+  display: none;
+}
+.setting-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.segmented-control {
+  display: flex;
+  background: var(--bg-secondary);
+  padding: 2px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+.seg-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.seg-btn.active {
+  background: var(--bg-surface);
+  font-weight: 600;
+  color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.pedal-tip-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  font-size: 11px;
+}
+.tip-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+.tip-content {
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

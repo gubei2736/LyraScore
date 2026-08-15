@@ -1,0 +1,220 @@
+/* ==========================================================================
+   LyraScore 乐谱阅读与演奏视口样式 (专为平板触控/手写笔优化)
+   ========================================================================== */
+
+.score-viewer-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  position: relative;
+}
+
+/* 顶部紧凑工具栏 */
+.reader-topbar {
+  height: 56px;
+  background-color: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 50;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+}
+.reader-topbar.hidden-bar {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.score-title-meta {
+  display: flex;
+  flex-direction: column;
+}
+.viewer-score-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.viewer-badges-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.topbar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.page-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+}
+.nav-arrow-btn {
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.nav-arrow-btn:hover {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+}
+.page-indicator {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 50px;
+  text-align: center;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.layout-toggle-group {
+  display: flex;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+.icon-toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 5px 8px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.icon-toggle-btn.active {
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 核心阅读视口 */
+.score-viewport-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 触控翻页边缘热区 */
+.touch-hotzone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+}
+.hotzone-left {
+  left: 0;
+  width: 12%;
+  cursor: w-resize;
+}
+.hotzone-right {
+  right: 0;
+  width: 12%;
+  cursor: e-resize;
+}
+.hotzone-center {
+  left: 35%;
+  width: 30%;
+  top: 0;
+  height: 60px;
+  cursor: pointer;
+}
+
+/* 页面排版舞台 */
+.score-pages-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.score-single-container, .score-double-container, .score-scroll-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 20px;
+  width: 100%;
+}
+
+.score-double-container {
+  flex-direction: row;
+}
+
+.score-page-wrapper {
+  position: relative;
+  background-color: #ffffff;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  border-radius: 4px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.score-base-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pen-overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+  z-index: 20;
+}
+
+/* MusicXML 容器 */
+.xml-page-wrapper {
+  width: 92%;
+  max-width: 1100px;
+  min-height: 900px;
+  padding: 24px;
+  background: #ffffff;
+}
+.xml-music-container {
+  width: 100%;
+  min-height: 800px;
+}

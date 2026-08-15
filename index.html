@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#fbf8f1">
+  <meta name="description" content="LyraScore - 专为安卓平板量身定制的轻量乐谱阅读与手写批注创作工作站">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>LyraScore 天琴乐谱 - 平板阅读与手写创作</title>
+  
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎼</text></svg>">
+  
+  <style>
+    .view-layer {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .view-layer.hidden {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.98);
+    }
+    .view-layer.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
