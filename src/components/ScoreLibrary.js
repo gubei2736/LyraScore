@@ -6,7 +6,6 @@
 import { scoreDB } from '../core/db.js';
 import { KEY_SIGNATURES } from '../core/state.js';
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
-import { ImageScoreRenderer } from '../renderers/imgRenderer.js';
 
 export class ScoreLibrary {
   constructor(containerElement, options = {}) {
@@ -35,6 +34,9 @@ export class ScoreLibrary {
   render() {
     this.container.innerHTML = `
       <div class="library-container">
+        <!-- 隐藏的全局文件选择器 -->
+        <input type="file" id="scoreFileInput" accept=".pdf,.xml,.musicxml,.mxl,image/*" multiple style="display: none;">
+
         <!-- 侧边分类与标签导航栏 (平板大屏分栏) -->
         <aside class="library-sidebar">
           <div class="brand-header">
@@ -47,11 +49,10 @@ export class ScoreLibrary {
 
           <!-- 快速导入按钮 -->
           <div class="import-section">
-            <label class="btn btn-primary import-btn" for="scoreFileInput">
+            <button class="btn btn-primary import-btn" id="btnImportSidebar">
               <span class="btn-icon">➕</span>
               <span>导入新乐谱</span>
-            </label>
-            <input type="file" id="scoreFileInput" accept=".pdf,.xml,.musicxml,.mxl,image/*" multiple style="display: none;">
+            </button>
             <p class="import-tip">支持 PDF / MusicXML / 图片</p>
           </div>
 
@@ -84,9 +85,7 @@ export class ScoreLibrary {
           <!-- 自定义标签云 -->
           <div class="sidebar-section">
             <div class="section-title">标签分类</div>
-            <div class="tag-cloud" id="sidebarTagCloud">
-              <!-- 动态生成标签 -->
-            </div>
+            <div class="tag-cloud" id="sidebarTagCloud"></div>
           </div>
 
           <div class="sidebar-footer">
@@ -122,9 +121,7 @@ export class ScoreLibrary {
           </div>
 
           <!-- 乐谱网格列表 -->
-          <div class="score-grid" id="scoreGridContainer">
-            <!-- 动态乐谱卡片 -->
-          </div>
+          <div class="score-grid" id="scoreGridContainer"></div>
         </main>
       </div>
     `;
@@ -132,7 +129,19 @@ export class ScoreLibrary {
     this.bindEvents();
   }
 
+  triggerFileImport() {
+    const fileInput = this.container.querySelector('#scoreFileInput');
+    if (fileInput) {
+      fileInput.click();
+    }
+  }
+
   bindEvents() {
+    // 导入按钮点击
+    this.container.querySelector('#btnImportSidebar')?.addEventListener('click', () => {
+      this.triggerFileImport();
+    });
+
     // 搜索
     const searchInput = this.container.querySelector('#scoreSearchInput');
     searchInput?.addEventListener('input', (e) => {
@@ -161,24 +170,25 @@ export class ScoreLibrary {
       this.onlyFavorites = false;
       this.selectedKey = null;
       this.selectedTag = null;
-      this.container.querySelector('#keyFilterSelect').value = '';
-      this.container.querySelector('#navAllScores').classList.add('active');
-      this.container.querySelector('#navFavorites').classList.remove('active');
+      const ks = this.container.querySelector('#keyFilterSelect');
+      if (ks) ks.value = '';
+      this.container.querySelector('#navAllScores')?.classList.add('active');
+      this.container.querySelector('#navFavorites')?.classList.remove('active');
       this.renderScoreGrid();
       this.renderTagCloud();
     });
 
     this.container.querySelector('#navFavorites')?.addEventListener('click', () => {
       this.onlyFavorites = true;
-      this.container.querySelector('#navFavorites').classList.add('active');
-      this.container.querySelector('#navAllScores').classList.remove('active');
+      this.container.querySelector('#navFavorites')?.classList.add('active');
+      this.container.querySelector('#navAllScores')?.classList.remove('active');
       this.renderScoreGrid();
     });
 
-    // 文件导入监听
+    // 文件选择监听
     const fileInput = this.container.querySelector('#scoreFileInput');
     fileInput?.addEventListener('change', async (e) => {
-      const files = Array.from(e.target.files);
+      const files = Array.from(e.target.files || []);
       if (files.length > 0) {
         await this.handleImportFiles(files);
         fileInput.value = '';
@@ -201,7 +211,7 @@ export class ScoreLibrary {
     mainEl?.addEventListener('drop', async (e) => {
       e.preventDefault();
       dropzone?.classList.remove('active');
-      const files = Array.from(e.dataTransfer.files);
+      const files = Array.from(e.dataTransfer.files || []);
       if (files.length > 0) {
         await this.handleImportFiles(files);
       }
@@ -221,12 +231,16 @@ export class ScoreLibrary {
     const cloudEl = this.container.querySelector('#sidebarTagCloud');
     if (!cloudEl) return;
 
-    // 聚合所有乐谱的标签
     const tagSet = new Set();
     this.scores.forEach(s => (s.tags || []).forEach(t => tagSet.add(t)));
 
+    if (tagSet.size === 0) {
+      cloudEl.innerHTML = `<span style="font-size: 12px; color: var(--text-muted, #9ca3af);">暂无标签</span>`;
+      return;
+    }
+
     cloudEl.innerHTML = `
-      <button class="tag-chip ${!this.selectedTag ? 'selected' : ''}" data-tag="">全部标签</button>
+      <button class="tag-chip ${!this.selectedTag ? 'selected' : ''}" data-tag="">全部</button>
       ${Array.from(tagSet).map(tag => `
         <button class="tag-chip ${this.selectedTag === tag ? 'selected' : ''}" data-tag="${escapeHtml(tag)}">
           #${escapeHtml(tag)}
@@ -268,12 +282,25 @@ export class ScoreLibrary {
 
     if (filtered.length === 0) {
       gridEl.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">🎼</div>
-          <h3>暂无符合条件的乐谱</h3>
-          <p>点击上方“导入新乐谱”或从电脑/平板中拖放 PDF、MusicXML、图片乐谱文件</p>
+        <div class="empty-state" style="grid-column: 1 / -1; padding: 60px 20px; text-align: center;">
+          <div class="empty-icon" style="font-size: 56px; margin-bottom: 16px;">🎼</div>
+          <h3 style="font-size: 22px; margin-bottom: 10px; color: var(--text-main, #1f2937);">
+            ${this.scores.length === 0 ? '乐谱书架为空' : '未找到匹配的乐谱'}
+          </h3>
+          <p style="color: var(--text-muted, #6b7280); max-width: 480px; margin: 0 auto 24px; line-height: 1.6;">
+            ${this.scores.length === 0 
+              ? '点击下方按钮或从平板文件中选择并导入您的第一本乐谱（支持 PDF / MusicXML / 高清乐谱图片）。' 
+              : '请尝试更换搜索词或清除筛选条件。'}
+          </p>
+          <button class="btn btn-primary btn-lg" id="btnEmptyStateImport" style="padding: 12px 28px; font-size: 16px; border-radius: 12px; cursor: pointer;">
+            📥 立即导入乐谱文件
+          </button>
         </div>
       `;
+
+      gridEl.querySelector('#btnEmptyStateImport')?.addEventListener('click', () => {
+        this.triggerFileImport();
+      });
       return;
     }
 
@@ -327,9 +354,9 @@ export class ScoreLibrary {
                 📖 开始阅读
               </button>
               <button class="btn btn-sm btn-outline" data-action="copy" title="创建独立练习/手写笔记副本">
-                🌿 创建副本
+                🌿 副本
               </button>
-              <button class="btn-icon-more" data-action="edit" title="重命名 / 调式与标签">
+              <button class="btn-icon-more" data-action="edit" title="编辑元数据">
                 ✏️
               </button>
               <button class="btn-icon-more btn-delete" data-action="delete" title="删除乐谱">
@@ -416,16 +443,19 @@ export class ScoreLibrary {
         const text = await file.text();
         fileData = text;
 
-        // 提取 MusicXML 中的标题
         const titleMatch = text.match(/<work-title>([^<]+)<\/work-title>/i) || text.match(/<movement-title>([^<]+)<\/movement-title>/i);
         if (titleMatch) title = titleMatch[1];
         const composerMatch = text.match(/<creator type="composer">([^<]+)<\/creator>/i);
         if (composerMatch) composer = composerMatch[1];
       } else if (file.type.startsWith('image/')) {
         format = 'image';
-        const blobUrl = URL.createObjectURL(file);
-        fileData = [blobUrl];
-        coverUrl = blobUrl;
+        const reader = new FileReader();
+        const dataUrl = await new Promise((res) => {
+          reader.onload = () => res(reader.result);
+          reader.readAsDataURL(file);
+        });
+        fileData = [dataUrl];
+        coverUrl = dataUrl;
       }
 
       const newScore = {
