@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读与专注模式主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部控制条（内嵌滑动缩放条、一体化翻页控制与定时翻页）、单/双页排版与自由拖拽手写笔工具箱
+ * 包含沉浸式视口、顶部控制条（内嵌极简滑动缩放条、一体化翻页控制与定时翻页）、单/双页排版与自由拖拽手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -68,9 +68,8 @@ export class ScoreViewer {
           </div>
 
           <div class="topbar-right">
-            <!-- 左右触控滑动缩放控制器 (Swipe Zoom Slider) -->
-            <div class="zoom-slider-box" title="左右拖动滑块或滑动缩放乐谱">
-              <span class="zoom-icon-label">🔍</span>
+            <!-- 极简触控滑动缩放条 (去除了放大镜图标，支持屏幕双指联动) -->
+            <div class="zoom-slider-box" title="左右滑动或在屏幕上双指捏合缩放乐谱">
               <input type="range" class="zoom-range-slider" id="zoomRangeSlider" min="60" max="260" step="5" value="100">
               <span class="zoom-pct-display" id="zoomLabel">100%</span>
             </div>
@@ -98,7 +97,7 @@ export class ScoreViewer {
           ✕ 退出专注
         </button>
 
-        <!-- 核心乐谱阅读视口 (支持手势上下/左右阻尼滑动翻页) -->
+        <!-- 核心乐谱阅读视口 (支持双指平滑缩放与手势上下/左右阻尼滑动翻页) -->
         <main class="score-viewport-container" id="scoreViewport">
           <!-- 左右触控翻页微型热区 -->
           <div class="touch-hotzone hotzone-left" id="hotzoneLeft" title="上一页"></div>
@@ -109,7 +108,7 @@ export class ScoreViewer {
           <div class="score-pages-stage" id="scorePagesStage"></div>
         </main>
 
-        <!-- 浮动手写笔工具箱容器 (半透明自由拖拽移动 + 智能边缘避让) -->
+        <!-- 浮动手写笔工具箱容器 (半透明自由拖拽移动 + 智能边缘避让 + 原始位置精准还原) -->
         <div class="floating-pen-container" id="floatingPenContainer"></div>
       </div>
     `;
@@ -123,6 +122,12 @@ export class ScoreViewer {
 
     this.reader = new ScoreReader(stageEl);
     this.autoFlip = new AutoFlipController(this.reader, viewportEl);
+
+    // 监听屏幕双指缩放手势，双向联动顶部滑动条
+    this.reader.onZoomChange = (newScale) => {
+      this.currentZoom = newScale;
+      this.updateZoomLabel();
+    };
 
     // 挂载手写笔浮动工具箱
     const penContainer = this.container.querySelector('#floatingPenContainer');
@@ -223,13 +228,12 @@ export class ScoreViewer {
       }
     });
 
-    // 左右滑动缩放控制器
+    // 顶部滑动缩放条拖动监听
     const zoomSlider = this.container.querySelector('#zoomRangeSlider');
     zoomSlider?.addEventListener('input', (e) => {
       const val = parseInt(e.target.value, 10);
       this.currentZoom = val / 100;
       this.reader.setZoom(this.currentZoom);
-      this.updateZoomLabel();
     });
 
     // 排版模式切换

@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、手势穿透、双指平滑缩放与支持上下/左右手势翻页的弹性阻尼引擎
+ * 具备防循环闪烁保护、手势穿透、双指平滑 Pinch-to-Zoom 缩放与双向手势翻页引擎
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -24,6 +24,7 @@ export class ScoreReader {
     this.zoomScale = 1.0;
     this.lastRenderedWidth = 0;
     this.isRendering = false;
+    this.onZoomChange = null; // 回调通知外部 UI 实时同步缩放比
 
     this.initWindowResizeListener();
     this.initGesturesAndDampedFlip();
@@ -62,13 +63,14 @@ export class ScoreReader {
     if (!vp) return;
 
     vp.addEventListener('touchstart', (e) => {
-      if (appState.get('isPenActive')) return; // 手写笔模式下由 Canvas 独立接管
+      if (appState.get('isPenActive')) return; // 手写笔绘制中不接管
 
       if (e.touches.length === 2) {
         isMultiTouch = true;
         isSwiping = false;
         initialDistance = getDistance(e.touches[0], e.touches[1]);
         initialScale = this.zoomScale;
+        this.container.style.transition = 'none';
         return;
       }
 
@@ -86,21 +88,26 @@ export class ScoreReader {
     vp.addEventListener('touchmove', (e) => {
       if (appState.get('isPenActive')) return;
 
+      // 1. 双指直接在屏幕上缩放乐谱 (Pinch-to-Zoom)
       if (isMultiTouch && e.touches.length === 2 && initialDistance > 0) {
         const dist = getDistance(e.touches[0], e.touches[1]);
-        const scale = Math.min(Math.max(initialScale * (dist / initialDistance), 0.6), 2.8);
+        const scale = Math.min(Math.max(initialScale * (dist / initialDistance), 0.6), 2.6);
+        this.zoomScale = scale;
         this.container.style.transform = `scale(${scale})`;
         this.container.style.transformOrigin = 'top center';
+        if (this.onZoomChange) {
+          this.onZoomChange(this.zoomScale);
+        }
         return;
       }
 
+      // 2. 单指滑动手势带弹性阻尼
       if (isSwiping && e.touches.length === 1) {
         currentX = e.touches[0].clientX;
         currentY = e.touches[0].clientY;
         const deltaX = currentX - startX;
         const deltaY = currentY - startY;
 
-        // 手指滑动时带有自然弹性阻尼跟随 (阻尼系数 0.32)
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
           if (Math.abs(deltaX) > 12) {
             const dampedX = deltaX * 0.32;
@@ -120,6 +127,9 @@ export class ScoreReader {
 
       if (isMultiTouch && e.touches.length < 2) {
         isMultiTouch = false;
+        if (this.onZoomChange) {
+          this.onZoomChange(this.zoomScale);
+        }
         return;
       }
 
@@ -127,11 +137,11 @@ export class ScoreReader {
         isSwiping = false;
         const deltaX = currentX - startX;
         const deltaY = currentY - startY;
-        const threshold = 45; // 触发翻页的滑动距离阈值
+        const threshold = 45;
 
         this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
 
-        // 1. 横向滑动手势 (左滑下一页 / 右滑上一页)
+        // 横向滑动手势
         if (Math.abs(deltaX) >= Math.abs(deltaY)) {
           if (deltaX < -threshold) {
             this.container.style.transform = `scale(${this.zoomScale}) translateX(-70px)`;
@@ -151,10 +161,9 @@ export class ScoreReader {
             return;
           }
         } 
-        // 2. 垂直滑动手势 (上滑下一页 / 下滑上一页)
+        // 垂直滑动手势
         else {
           if (deltaY < -threshold) {
-            // 向上滑 -> 下一页
             this.container.style.transform = `scale(${this.zoomScale}) translateY(-70px)`;
             setTimeout(async () => {
               await this.nextPage();
@@ -163,7 +172,6 @@ export class ScoreReader {
             }, 140);
             return;
           } else if (deltaY > threshold) {
-            // 向下滑 -> 上一页
             this.container.style.transform = `scale(${this.zoomScale}) translateY(70px)`;
             setTimeout(async () => {
               await this.prevPage();
@@ -181,9 +189,12 @@ export class ScoreReader {
   }
 
   setZoom(scale) {
-    this.zoomScale = Math.min(Math.max(scale, 0.6), 2.8);
+    this.zoomScale = Math.min(Math.max(scale, 0.6), 2.6);
     this.container.style.transform = `scale(${this.zoomScale})`;
     this.container.style.transformOrigin = 'top center';
+    if (this.onZoomChange) {
+      this.onZoomChange(this.zoomScale);
+    }
   }
 
   async loadScore(score, initialPage = 0) {

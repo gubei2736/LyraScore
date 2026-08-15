@@ -3,7 +3,7 @@
  * 具备：
  * 1. 极致半透明水晶毛玻璃悬浮胶囊
  * 2. 全屏自由拖拽任意移动位置
- * 3. 智能视口边界避让算法 (Smart Viewport Collision Avoidance)：无论停在任何边缘，展开面板 100% 完整可见
+ * 3. 智能视口边界避让算法 + 原始锚点精准记忆还原 (打开避让防截断，关闭绝对复位原位)
  */
 
 import { MUSICAL_STAMPS } from '../core/penEngine/stamps.js';
@@ -15,6 +15,10 @@ export class PenToolbox {
     this.reader = scoreReader;
     this.isExpanded = false;
     this.isStampPickerOpen = false;
+
+    // 记录用户拖拽锚定的原始坐标
+    this.userAnchorLeft = null;
+    this.userAnchorTop = null;
 
     this.colors = [
       '#1a56db', // 经典天琴蓝
@@ -47,9 +51,17 @@ export class PenToolbox {
       box.classList.toggle('collapsed', !this.isExpanded);
     }
 
-    // 智能视口边界避让：展开时确保面板完整容纳在屏幕中
     if (this.isExpanded) {
+      // 展开时：记录当前胶囊位置为用户锚点，并计算屏幕边界安全避让
+      if (this.userAnchorLeft === null) {
+        const r = this.container.getBoundingClientRect();
+        this.userAnchorLeft = r.left;
+        this.userAnchorTop = r.top;
+      }
       this.adjustPositionForExpandedPanel();
+    } else {
+      // 关闭/收起时：严格复位到用户最初放置的原始坐标，绝不发生任何位移
+      this.restoreUserAnchorPosition();
     }
 
     appState.set({ isPenActive: this.isExpanded });
@@ -63,31 +75,40 @@ export class PenToolbox {
       const panelWidth = 340;
       const panelHeight = 230;
 
-      let newLeft = rect.left;
-      let newTop = rect.top;
+      let safeLeft = this.userAnchorLeft !== null ? this.userAnchorLeft : rect.left;
+      let safeTop = this.userAnchorTop !== null ? this.userAnchorTop : rect.top;
 
-      // 右边缘溢出检测
-      if (newLeft + panelWidth > window.innerWidth - 12) {
-        newLeft = window.innerWidth - panelWidth - 12;
+      // 右边缘避让
+      if (safeLeft + panelWidth > window.innerWidth - 12) {
+        safeLeft = window.innerWidth - panelWidth - 12;
       }
-      // 左边缘溢出检测
-      if (newLeft < 12) {
-        newLeft = 12;
+      // 左边缘避让
+      if (safeLeft < 12) {
+        safeLeft = 12;
       }
-      // 下边缘溢出检测
-      if (newTop + panelHeight > window.innerHeight - 12) {
-        newTop = window.innerHeight - panelHeight - 12;
+      // 下边缘避让
+      if (safeTop + panelHeight > window.innerHeight - 12) {
+        safeTop = window.innerHeight - panelHeight - 12;
       }
-      // 上边缘溢出检测 (留出顶部工具栏高度)
-      if (newTop < 56) {
-        newTop = 56;
+      // 上边缘避让
+      if (safeTop < 56) {
+        safeTop = 56;
       }
 
-      container.style.left = `${Math.round(newLeft)}px`;
-      container.style.top = `${Math.round(newTop)}px`;
+      container.style.left = `${Math.round(safeLeft)}px`;
+      container.style.top = `${Math.round(safeTop)}px`;
       container.style.right = 'auto';
       container.style.bottom = 'auto';
     });
+  }
+
+  restoreUserAnchorPosition() {
+    if (this.userAnchorLeft !== null && this.userAnchorTop !== null) {
+      this.container.style.left = `${Math.round(this.userAnchorLeft)}px`;
+      this.container.style.top = `${Math.round(this.userAnchorTop)}px`;
+      this.container.style.right = 'auto';
+      this.container.style.bottom = 'auto';
+    }
   }
 
   render() {
@@ -232,6 +253,10 @@ export class PenToolbox {
 
       container.style.left = `${newLeft}px`;
       container.style.top = `${newTop}px`;
+
+      // 实时记录用户设定的锚点
+      this.userAnchorLeft = newLeft;
+      this.userAnchorTop = newTop;
     };
 
     const onPointerUp = (e) => {
