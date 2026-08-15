@@ -1,6 +1,6 @@
 /**
  * 高精度专业节拍器调度引擎 (Web Audio Lookahead Scheduler)
- * 采用 Web Audio API 的精准硬件时钟进行微秒级节奏调度，杜绝 JS 定时器漂移与卡顿
+ * 采用精准硬件时钟进行微秒级节奏调度，支持全自由自定义重拍模式 (Accents Customization)
  */
 
 export class MetronomeCore {
@@ -9,6 +9,8 @@ export class MetronomeCore {
     this.bpm = 120;
     this.beatsPerBar = 4; // 拍号: 4/4
     this.beatUnit = 4;
+    // 拍型模式数组: 1 = 重拍 (Accent), 0 = 弱拍 (Normal), -1 = 静音拍 (Muted)
+    this.accentPattern = [1, 0, 0, 0];
     this.volume = 0.8;
     this.isMuted = false;
     this.isPlaying = false;
@@ -16,10 +18,10 @@ export class MetronomeCore {
     this.currentBeatInBar = 0; // 0-based
     this.nextNoteTime = 0.0;
     this.timerWorkerId = null;
-    this.lookaheadMs = 25.0; // 调度轮询周期 (ms)
-    this.scheduleAheadTime = 0.1; // 预调度时间窗 (s)
+    this.lookaheadMs = 25.0;
+    this.scheduleAheadTime = 0.1;
 
-    this.onBeatTick = null; // 回调: (currentBeatInBar, isFirstBeat) => {}
+    this.onBeatTick = null; // 回调: (beatIndex, beatType) => {}  type: 1(重), 0(弱), -1(静音)
   }
 
   ensureAudioContext() {
@@ -37,9 +39,33 @@ export class MetronomeCore {
   }
 
   setTimeSignature(beats, unit = 4) {
-    this.beatsPerBar = parseInt(beats, 10) || 4;
+    this.beatsPerBar = Math.min(Math.max(parseInt(beats, 10) || 4, 1), 16);
     this.beatUnit = parseInt(unit, 10) || 4;
+
+    // 重构重拍模式数组 (第一拍默认重拍，其余弱拍)
+    this.accentPattern = Array.from({ length: this.beatsPerBar }, (_, i) => i === 0 ? 1 : 0);
     this.currentBeatInBar = 0;
+  }
+
+  setAccentPattern(pattern) {
+    if (Array.isArray(pattern) && pattern.length > 0) {
+      this.accentPattern = pattern;
+      this.beatsPerBar = pattern.length;
+    }
+  }
+
+  toggleBeatAccent(index) {
+    if (index >= 0 && index < this.accentPattern.length) {
+      const cur = this.accentPattern[index];
+      // 循环切换: 1(重拍) -> 0(弱拍) -> -1(静音) -> 1(重拍)
+      if (cur === 1) {
+        this.accentPattern[index] = 0;
+      } else if (cur === 0) {
+        this.accentPattern[index] = -1;
+      } else {
+        this.accentPattern[index] = 1;
+      }
+    }
   }
 
   setVolume(vol) {
@@ -98,18 +124,18 @@ export class MetronomeCore {
   }
 
   scheduleNote(beatNumber, time) {
-    const isFirstBeat = (beatNumber === 0);
+    const beatType = this.accentPattern[beatNumber] !== undefined ? this.accentPattern[beatNumber] : 0;
 
-    // 触发 UI 视觉光点闪烁同步 (借助 setTimeout 对齐音频播放时刻)
+    // 触发 UI 视觉闪烁对齐
     const delayMs = Math.max(0, (time - this.audioCtx.currentTime) * 1000);
     setTimeout(() => {
       if (this.isPlaying && this.onBeatTick) {
-        this.onBeatTick(beatNumber, isFirstBeat);
+        this.onBeatTick(beatNumber, beatType);
       }
     }, delayMs);
 
-    // 发声合成 (若静音模式则不发声，纯视觉对拍)
-    if (this.isMuted || this.volume <= 0.01) return;
+    // 如果全局静音或当前拍被用户设为静音拍(-1)，则不发声
+    if (this.isMuted || beatType === -1 || this.volume <= 0.01) return;
 
     try {
       const osc = this.audioCtx.createOscillator();
@@ -118,16 +144,17 @@ export class MetronomeCore {
       osc.connect(gain);
       gain.connect(this.audioCtx.destination);
 
-      // 第一拍为清脆高音，其余拍为沉稳弱音 (经典木鱼/发条节拍器音色)
-      if (isFirstBeat) {
-        osc.frequency.setValueAtTime(1046.5, time); // C6 高亢重音
+      const isAccent = (beatType === 1);
+
+      // 重拍高亢清脆，弱拍沉稳
+      if (isAccent) {
+        osc.frequency.setValueAtTime(1046.5, time); // C6
       } else {
-        osc.frequency.setValueAtTime(523.25, time); // C5 柔和副拍
+        osc.frequency.setValueAtTime(523.25, time); // C5
       }
 
-      const noteVolume = isFirstBeat ? this.volume : this.volume * 0.7;
+      const noteVolume = isAccent ? this.volume : this.volume * 0.65;
       gain.gain.setValueAtTime(noteVolume, time);
-      // 快速指数衰减
       gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
 
       osc.start(time);

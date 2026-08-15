@@ -12,7 +12,7 @@
   position: relative;
 }
 
-/* 顶部紧凑控制栏 */
+/* 顶部紧凑控制栏 (支持节拍器全景闪烁脉冲) */
 .reader-topbar {
   height: 52px;
   background-color: var(--bg-glass, rgba(255, 255, 255, 0.92));
@@ -25,12 +25,24 @@
   padding: 0 14px;
   z-index: 50;
   gap: 10px;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, background-color 0.08s ease, box-shadow 0.08s ease;
 }
 .reader-topbar.hidden-bar {
   transform: translateY(-100%);
   opacity: 0;
   pointer-events: none;
+}
+
+/* 顶部工具栏全景闪烁动画 (重拍金红脉冲 / 弱拍柔蓝脉冲) */
+.reader-topbar.topbar-flash-accent {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.45);
+  border-bottom-color: #ef4444;
+}
+.reader-topbar.topbar-flash-normal {
+  background-color: rgba(59, 130, 246, 0.16) !important;
+  box-shadow: 0 2px 14px rgba(59, 130, 246, 0.3);
+  border-bottom-color: #3b82f6;
 }
 
 .topbar-left {
@@ -192,7 +204,7 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 270px;
+  width: 280px;
   background-color: var(--bg-glass, rgba(255, 255, 255, 0.94));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -215,6 +227,38 @@
   font-weight: 700;
 }
 
+/* 手动输入数字行 */
+.setting-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.setting-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px 6px;
+  gap: 4px;
+}
+.manual-number-input {
+  width: 50px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-primary, #1a56db);
+  text-align: right;
+  outline: none;
+}
+.input-unit {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 /* ================= 顶部专业节拍器控件 ================= */
 .topbar-metronome-widget {
   display: flex;
@@ -232,9 +276,13 @@
   box-shadow: 0 0 10px rgba(26, 86, 219, 0.25);
   background-color: var(--accent-light, #e0e7ff);
 }
-.topbar-metronome-widget.beat-flash {
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
-  border-color: #ef4444;
+.topbar-metronome-widget.beat-flash-accent {
+  box-shadow: 0 0 18px rgba(239, 68, 68, 0.8) !important;
+  border-color: #ef4444 !important;
+}
+.topbar-metronome-widget.beat-flash-normal {
+  box-shadow: 0 0 14px rgba(59, 130, 246, 0.6) !important;
+  border-color: #3b82f6 !important;
 }
 
 .topbar-metro-btn {
@@ -274,7 +322,7 @@
   position: absolute;
   top: calc(100% + 8px);
   right: -60px;
-  width: 290px;
+  width: 310px;
   background-color: var(--bg-glass, rgba(255, 255, 255, 0.94));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
@@ -298,31 +346,103 @@
   color: var(--text-primary);
 }
 
-.metro-beat-dots {
+/* 自定义重拍区域 */
+.metro-custom-accents-section {
   display: flex;
-  justify-content: center;
-  gap: 10px;
-  padding: 6px 0;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 10px;
 }
-.beat-dot {
-  width: 14px;
-  height: 14px;
+.metro-accents-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.accents-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.metro-beats-counter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.beats-step-btn {
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  background: var(--border-color, #e5e7eb);
-  border: 2px solid transparent;
-  transition: transform 0.08s ease, background-color 0.08s ease, box-shadow 0.08s ease;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.beat-dot.accent-dot {
-  border-color: rgba(239, 68, 68, 0.3);
+.beats-count-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-primary, #1a56db);
 }
-.beat-dot.active {
-  background-color: #3b82f6;
-  transform: scale(1.3);
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+
+.metro-beat-dots-interactive {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
 }
-.beat-dot.active.accent {
-  background-color: #ef4444;
-  box-shadow: 0 0 14px rgba(239, 68, 68, 0.9);
+.interactive-beat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  padding: 2px;
+  transition: all 0.12s ease;
+}
+.pill-number {
+  font-size: 10px;
+  font-weight: 800;
+}
+.pill-type-label {
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* 重拍 🔴 */
+.interactive-beat-pill.type-accent {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #dc2626;
+}
+/* 弱拍 🔵 */
+.interactive-beat-pill.type-normal {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #2563eb;
+}
+/* 静音 ⚪ */
+.interactive-beat-pill.type-mute {
+  background: var(--bg-surface);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+/* 节拍正在击中该拍动画 */
+.interactive-beat-pill.ticking-now {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px currentColor;
+  filter: brightness(1.2);
 }
 
 .metro-bpm-control-row {
@@ -404,6 +524,58 @@
 }
 .metro-tap-btn:active {
   transform: scale(0.92);
+}
+
+/* 全景闪烁开关行 */
+.metro-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.toggle-row-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.metro-switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 20px;
+}
+.metro-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.metro-slider-toggle {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border-color);
+  transition: .2s;
+  border-radius: 20px;
+}
+.metro-slider-toggle:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .2s;
+  border-radius: 50%;
+}
+.metro-switch input:checked + .metro-slider-toggle {
+  background-color: var(--accent-primary, #1a56db);
+}
+.metro-switch input:checked + .metro-slider-toggle:before {
+  transform: translateX(18px);
 }
 
 .metro-sound-row {

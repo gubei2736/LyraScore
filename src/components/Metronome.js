@@ -2,10 +2,10 @@
  * 专业节拍器 UI 组件 (Metronome Component)
  * 具备：
  * 1. 顶部紧凑状态胶囊 + 动态声光节奏动画
- * 2. 水晶毛玻璃多功能控制面板
- * 3. 40 ~ 240 BPM 自由调速 + Tap Tempo 测速打拍
- * 4. 常见拍号切换 (2/4, 3/4, 4/4, 6/8)
- * 5. 静音视觉对拍模式 (演出/静音练习适用)
+ * 2. 自由自定义重拍模式 (点按任意拍切换 重拍/弱拍/休止)
+ * 3. 顶部工具栏全景闪烁开关 (开启后全工具栏随节拍律动呼吸闪烁)
+ * 4. 40 ~ 240 BPM 自由调速 + Tap Tempo 测速打拍
+ * 5. 常见拍号预设 (2/4, 3/4, 4/4, 6/8) 及任意拍数自由增减
  */
 
 import { MetronomeCore } from '../core/metronome.js';
@@ -15,6 +15,7 @@ export class Metronome {
     this.container = containerElement;
     this.core = new MetronomeCore();
     this.isPopoverOpen = false;
+    this.isTopbarFlashEnabled = false; // 顶部工具栏全景闪烁开关 (默认关闭)
 
     // Tap Tempo 测速记录
     this.tapTimes = [];
@@ -23,15 +24,15 @@ export class Metronome {
     this.bindEvents();
 
     // 节拍跳动回调
-    this.core.onBeatTick = (beatIndex, isFirstBeat) => {
-      this.handleBeatTick(beatIndex, isFirstBeat);
+    this.core.onBeatTick = (beatIndex, beatType) => {
+      this.handleBeatTick(beatIndex, beatType);
     };
   }
 
   render() {
     const isPlaying = this.core.isPlaying;
     const bpm = this.core.bpm;
-    const beats = this.core.beatsPerBar;
+    const pattern = this.core.accentPattern;
     const isMuted = this.core.isMuted;
 
     this.container.innerHTML = `
@@ -54,11 +55,36 @@ export class Metronome {
             <button class="stamp-close-btn" id="metroCloseBtn">✕</button>
           </div>
 
-          <!-- 视觉节拍光点点阵 -->
-          <div class="metro-beat-dots" id="metroBeatDots">
-            ${Array.from({ length: beats }).map((_, i) => `
-              <div class="beat-dot ${i === 0 ? 'accent-dot' : ''}" data-beat-idx="${i}"></div>
-            `).join('')}
+          <!-- 自定义重拍交互点阵 (点击可切换: 🔴重拍 / 🔵弱拍 / ⚪静音) -->
+          <div class="metro-custom-accents-section">
+            <div class="metro-accents-header">
+              <span class="accents-title">重拍自定义 (轻触小圆灯切换)</span>
+              <div class="metro-beats-counter">
+                <button class="beats-step-btn" id="metroMinusBeatBtn" title="减少一拍">-</button>
+                <span class="beats-count-text">${pattern.length} 拍</span>
+                <button class="beats-step-btn" id="metroPlusBeatBtn" title="增加一拍">+</button>
+              </div>
+            </div>
+
+            <div class="metro-beat-dots-interactive" id="metroInteractiveDots">
+              ${pattern.map((type, idx) => {
+                let typeClass = 'type-normal';
+                let label = '弱';
+                if (type === 1) {
+                  typeClass = 'type-accent';
+                  label = '重';
+                } else if (type === -1) {
+                  typeClass = 'type-mute';
+                  label = '休';
+                }
+                return `
+                  <button class="interactive-beat-pill ${typeClass}" data-beat-idx="${idx}" title="第 ${idx + 1} 拍：点击切换重拍/弱拍/休止">
+                    <span class="pill-number">${idx + 1}</span>
+                    <span class="pill-type-label">${label}</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
           </div>
 
           <!-- BPM 仪表核心调节区 -->
@@ -78,15 +104,24 @@ export class Metronome {
             <input type="range" class="size-slider" id="metroBpmSlider" min="40" max="240" step="1" value="${bpm}">
           </div>
 
-          <!-- 拍号切换与 Tap Tempo 测速 -->
+          <!-- 拍号预设与 Tap Tempo 测速 -->
           <div class="metro-meta-row">
             <div class="metro-time-signatures">
-              <button class="metro-sig-btn ${beats === 2 ? 'active' : ''}" data-beats="2">2/4</button>
-              <button class="metro-sig-btn ${beats === 3 ? 'active' : ''}" data-beats="3">3/4</button>
-              <button class="metro-sig-btn ${beats === 4 ? 'active' : ''}" data-beats="4">4/4</button>
-              <button class="metro-sig-btn ${beats === 6 ? 'active' : ''}" data-beats="6">6/8</button>
+              <button class="metro-sig-btn ${pattern.length === 2 ? 'active' : ''}" data-beats="2">2/4</button>
+              <button class="metro-sig-btn ${pattern.length === 3 ? 'active' : ''}" data-beats="3">3/4</button>
+              <button class="metro-sig-btn ${pattern.length === 4 ? 'active' : ''}" data-beats="4">4/4</button>
+              <button class="metro-sig-btn ${pattern.length === 6 ? 'active' : ''}" data-beats="6">6/8</button>
             </div>
             <button class="metro-tap-btn" id="metroTapBtn" title="连续轻点测速">TAP 测速</button>
+          </div>
+
+          <!-- 顶部工具栏全景闪烁开关 (新增功能) -->
+          <div class="metro-toggle-row">
+            <span class="toggle-row-label">💡 顶部工具栏全景闪烁</span>
+            <label class="metro-switch">
+              <input type="checkbox" id="metroTopbarFlashSwitch" ${this.isTopbarFlashEnabled ? 'checked' : ''}>
+              <span class="metro-slider-toggle"></span>
+            </label>
           </div>
 
           <!-- 静音与音量控制 -->
@@ -119,6 +154,35 @@ export class Metronome {
       this.container.querySelector('#metroPopover')?.classList.remove('open');
     });
 
+    // 自定义重拍点按切换
+    this.container.querySelectorAll('.interactive-beat-pill').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.beatIdx, 10);
+        this.core.toggleBeatAccent(idx);
+        this.render();
+        this.bindEvents();
+      });
+    });
+
+    // 拍数增减
+    this.container.querySelector('#metroMinusBeatBtn')?.addEventListener('click', () => {
+      if (this.core.accentPattern.length > 1) {
+        const newPattern = this.core.accentPattern.slice(0, -1);
+        this.core.setAccentPattern(newPattern);
+        this.render();
+        this.bindEvents();
+      }
+    });
+
+    this.container.querySelector('#metroPlusBeatBtn')?.addEventListener('click', () => {
+      if (this.core.accentPattern.length < 12) {
+        const newPattern = [...this.core.accentPattern, 0];
+        this.core.setAccentPattern(newPattern);
+        this.render();
+        this.bindEvents();
+      }
+    });
+
     // BPM 加减微调
     this.container.querySelector('#metroMinus5Btn')?.addEventListener('click', () => this.changeBpmBy(-5));
     this.container.querySelector('#metroMinus1Btn')?.addEventListener('click', () => this.changeBpmBy(-1));
@@ -131,7 +195,7 @@ export class Metronome {
       this.setBpm(val);
     });
 
-    // 拍号选择
+    // 拍号预设
     this.container.querySelectorAll('.metro-sig-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const b = parseInt(btn.dataset.beats, 10);
@@ -144,6 +208,11 @@ export class Metronome {
     // Tap Tempo 测速打拍
     this.container.querySelector('#metroTapBtn')?.addEventListener('click', () => {
       this.handleTapTempo();
+    });
+
+    // 顶部全景闪烁开关
+    this.container.querySelector('#metroTopbarFlashSwitch')?.addEventListener('change', (e) => {
+      this.isTopbarFlashEnabled = e.target.checked;
     });
 
     // 静音切换
@@ -183,7 +252,6 @@ export class Metronome {
     const now = Date.now();
     this.tapTimes.push(now);
 
-    // 仅保留最近 2 秒内的敲击
     this.tapTimes = this.tapTimes.filter(t => now - t < 3000);
 
     if (this.tapTimes.length >= 2) {
@@ -201,20 +269,35 @@ export class Metronome {
     }
   }
 
-  handleBeatTick(beatIndex, isFirstBeat) {
+  handleBeatTick(beatIndex, beatType) {
+    // 1. 节拍器胶囊微闪烁
     const widget = this.container.querySelector('#metronomeWidget');
     if (widget) {
-      widget.classList.add('beat-flash');
-      setTimeout(() => widget.classList.remove('beat-flash'), 90);
+      widget.classList.add(beatType === 1 ? 'beat-flash-accent' : 'beat-flash-normal');
+      setTimeout(() => {
+        widget.classList.remove('beat-flash-accent', 'beat-flash-normal');
+      }, 90);
     }
 
-    const dots = this.container.querySelectorAll('.beat-dot');
-    dots.forEach((dot, idx) => {
+    // 2. 顶部工具栏全景闪烁 (若用户开启了开关)
+    if (this.isTopbarFlashEnabled) {
+      const topbar = document.getElementById('readerTopbar');
+      if (topbar) {
+        const flashClass = (beatType === 1) ? 'topbar-flash-accent' : 'topbar-flash-normal';
+        topbar.classList.add(flashClass);
+        setTimeout(() => {
+          topbar.classList.remove('topbar-flash-accent', 'topbar-flash-normal');
+        }, 110);
+      }
+    }
+
+    // 3. 面板内交互小药丸高亮
+    const pills = this.container.querySelectorAll('.interactive-beat-pill');
+    pills.forEach((pill, idx) => {
       if (idx === beatIndex) {
-        dot.classList.add('active');
-        if (isFirstBeat) dot.classList.add('accent');
+        pill.classList.add('ticking-now');
       } else {
-        dot.classList.remove('active', 'accent');
+        pill.classList.remove('ticking-now');
       }
     });
   }

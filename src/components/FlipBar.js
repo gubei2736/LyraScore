@@ -1,6 +1,6 @@
 /**
  * 顶部工具栏内嵌定时翻页控制器 (FlipBar Component)
- * 紧凑优雅地嵌入在阅读器顶部导航栏，包含倒计时动画与极简下拉设置弹窗
+ * 具备手动精确数字输入单页停留时长、滑动条双向联动与极简下拉设置面板
  */
 
 import { appState } from '../core/state.js';
@@ -50,7 +50,7 @@ export class FlipBar {
           ⚙️
         </button>
 
-        <!-- 下拉设置面板 (纯净无外设干扰) -->
+        <!-- 下拉设置面板 -->
         <div class="topbar-flip-popover ${this.isSettingsOpen ? 'open' : ''}" id="flipSettingsPopover">
           <div class="flip-popover-header">
             <span>⏱️ 自动翻页设置</span>
@@ -65,13 +65,27 @@ export class FlipBar {
             </div>
           </div>
 
+          <!-- 单页停留时长 (支持手动精确数字输入与滑动条双向联动) -->
           <div class="setting-item ${mode === 'flip' ? '' : 'hidden'}" id="flipIntervalSection">
-            <label class="setting-label">单页停留时长: <strong id="intervalDisplay">${intervalSec}</strong> 秒</label>
-            <input type="range" class="size-slider" id="flipIntervalSlider" min="3" max="120" step="1" value="${intervalSec}">
+            <div class="setting-input-header">
+              <label class="setting-label">单页停留时长</label>
+              <div class="setting-input-wrapper">
+                <input type="number" class="manual-number-input" id="flipIntervalNumberInput" min="1" max="999" step="1" value="${intervalSec}">
+                <span class="input-unit">秒</span>
+              </div>
+            </div>
+            <input type="range" class="size-slider" id="flipIntervalSlider" min="2" max="120" step="1" value="${intervalSec}">
           </div>
 
+          <!-- 平滑滚动速率 -->
           <div class="setting-item ${mode === 'scroll' ? '' : 'hidden'}" id="scrollSpeedSection">
-            <label class="setting-label">平滑滚动速率: <strong id="speedDisplay">${scrollSpeed}</strong> px/s</label>
+            <div class="setting-input-header">
+              <label class="setting-label">平滑滚动速率</label>
+              <div class="setting-input-wrapper">
+                <input type="number" class="manual-number-input" id="scrollSpeedNumberInput" min="5" max="300" step="5" value="${scrollSpeed}">
+                <span class="input-unit">px/s</span>
+              </div>
+            </div>
             <input type="range" class="size-slider" id="scrollSpeedSlider" min="10" max="150" step="5" value="${scrollSpeed}">
           </div>
         </div>
@@ -88,10 +102,10 @@ export class FlipBar {
       const mode = appState.get('autoFlipMode');
       if (mode === 'flip') {
         const cur = appState.get('flipIntervalSec');
-        this.controller.setIntervalSec(cur - 2);
+        this.updateInterval(cur - 2);
       } else {
         const cur = appState.get('scrollSpeed');
-        this.controller.setScrollSpeed(cur - 5);
+        this.updateScrollSpeed(cur - 5);
       }
     });
 
@@ -99,10 +113,10 @@ export class FlipBar {
       const mode = appState.get('autoFlipMode');
       if (mode === 'flip') {
         const cur = appState.get('flipIntervalSec');
-        this.controller.setIntervalSec(cur + 2);
+        this.updateInterval(cur + 2);
       } else {
         const cur = appState.get('scrollSpeed');
-        this.controller.setScrollSpeed(cur + 5);
+        this.updateScrollSpeed(cur + 5);
       }
     });
 
@@ -126,19 +140,59 @@ export class FlipBar {
       });
     });
 
-    this.container.querySelector('#flipIntervalSlider')?.addEventListener('input', (e) => {
+    // 单页停留时长：手动数字输入框
+    const numInput = this.container.querySelector('#flipIntervalNumberInput');
+    numInput?.addEventListener('input', (e) => {
       const v = parseInt(e.target.value, 10);
-      this.controller.setIntervalSec(v);
-      const disp = this.container.querySelector('#intervalDisplay');
-      if (disp) disp.textContent = v;
+      if (!isNaN(v) && v > 0) {
+        this.controller.setIntervalSec(v);
+        const slider = this.container.querySelector('#flipIntervalSlider');
+        if (slider) slider.value = Math.min(Math.max(v, 2), 120);
+      }
     });
 
-    this.container.querySelector('#scrollSpeedSlider')?.addEventListener('input', (e) => {
+    // 单页停留时长：滑动条
+    const slider = this.container.querySelector('#flipIntervalSlider');
+    slider?.addEventListener('input', (e) => {
       const v = parseInt(e.target.value, 10);
-      this.controller.setScrollSpeed(v);
-      const disp = this.container.querySelector('#speedDisplay');
-      if (disp) disp.textContent = v;
+      this.updateInterval(v);
     });
+
+    // 平滑滚动速率：手动数字输入框
+    const speedNumInput = this.container.querySelector('#scrollSpeedNumberInput');
+    speedNumInput?.addEventListener('input', (e) => {
+      const v = parseInt(e.target.value, 10);
+      if (!isNaN(v) && v > 0) {
+        this.controller.setScrollSpeed(v);
+        const spdSlider = this.container.querySelector('#scrollSpeedSlider');
+        if (spdSlider) spdSlider.value = Math.min(Math.max(v, 10), 150);
+      }
+    });
+
+    // 平滑滚动速率：滑动条
+    const spdSlider = this.container.querySelector('#scrollSpeedSlider');
+    spdSlider?.addEventListener('input', (e) => {
+      const v = parseInt(e.target.value, 10);
+      this.updateScrollSpeed(v);
+    });
+  }
+
+  updateInterval(sec) {
+    const safeSec = Math.max(1, sec);
+    this.controller.setIntervalSec(safeSec);
+    const numInput = this.container.querySelector('#flipIntervalNumberInput');
+    const slider = this.container.querySelector('#flipIntervalSlider');
+    if (numInput) numInput.value = safeSec;
+    if (slider) slider.value = Math.min(Math.max(safeSec, 2), 120);
+  }
+
+  updateScrollSpeed(speed) {
+    const safeSpeed = Math.max(5, speed);
+    this.controller.setScrollSpeed(safeSpeed);
+    const numInput = this.container.querySelector('#scrollSpeedNumberInput');
+    const slider = this.container.querySelector('#scrollSpeedSlider');
+    if (numInput) numInput.value = safeSpeed;
+    if (slider) slider.value = Math.min(Math.max(safeSpeed, 10), 150);
   }
 
   updateProgress(progress, remainingSec) {
