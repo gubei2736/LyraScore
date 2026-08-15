@@ -1,6 +1,6 @@
 /**
  * 顶部工具栏内嵌定时翻页控制器 (FlipBar Component)
- * 具备手动精确数字输入单页停留时长、滑动条双向联动与极简下拉设置面板
+ * 具备高辨识度模式切换选择卡、手动输入时长数字框与顶部胶囊实时联动
  */
 
 import { appState } from '../core/state.js';
@@ -31,11 +31,11 @@ export class FlipBar {
 
     this.container.innerHTML = `
       <div class="topbar-flip-widget ${isRunning ? 'running' : 'idle'}">
-        <!-- 主播放/暂停按钮 -->
+        <!-- 主播放/暂停按钮 (实时反映当前模式) -->
         <button class="topbar-flip-play-btn" id="flipMainToggleBtn" title="${isRunning ? '暂停自动翻页' : '开始自动翻页'}">
           <span class="flip-play-icon" id="flipCenterIcon">${isRunning ? '⏸' : '▶'}</span>
           <span class="flip-play-text" id="flipTimeCounter">
-            ${mode === 'flip' ? `翻页 ${intervalSec}s` : `滚动 ${scrollSpeed}px`}
+            ${mode === 'flip' ? `定时翻页: ${intervalSec}s` : `平滑滚动: ${scrollSpeed}px/s`}
           </span>
         </button>
 
@@ -57,15 +57,32 @@ export class FlipBar {
             <button class="stamp-close-btn" id="flipSettingsCloseBtn">✕</button>
           </div>
 
-          <div class="setting-item">
-            <label class="setting-label">翻页模式</label>
-            <div class="segmented-control">
-              <button class="seg-btn ${mode === 'flip' ? 'active' : ''}" data-mode="flip">定时整页</button>
-              <button class="seg-btn ${mode === 'scroll' ? 'active' : ''}" data-mode="scroll">匀速平滑滚动</button>
+          <!-- 高辨识度模式选择卡片组 -->
+          <div class="flip-mode-cards-group">
+            <div class="flip-mode-card ${mode === 'flip' ? 'selected' : ''}" data-mode="flip">
+              <div class="mode-card-icon">📄</div>
+              <div class="mode-card-info">
+                <div class="mode-card-title">定时整页翻页</div>
+                <div class="mode-card-desc">倒计时结束瞬间翻到下一页</div>
+              </div>
+              <div class="mode-card-radio-mark">
+                ${mode === 'flip' ? '✓ 已选择' : '选择'}
+              </div>
+            </div>
+
+            <div class="flip-mode-card ${mode === 'scroll' ? 'selected' : ''}" data-mode="scroll">
+              <div class="mode-card-icon">📜</div>
+              <div class="mode-card-info">
+                <div class="mode-card-title">匀速平滑滚动</div>
+                <div class="mode-card-desc">视口自上而下匀速平稳滑行</div>
+              </div>
+              <div class="mode-card-radio-mark">
+                ${mode === 'scroll' ? '✓ 已选择' : '选择'}
+              </div>
             </div>
           </div>
 
-          <!-- 单页停留时长 (支持手动精确数字输入与滑动条双向联动) -->
+          <!-- 单页停留时长 (仅在定时整页模式下呈现) -->
           <div class="setting-item ${mode === 'flip' ? '' : 'hidden'}" id="flipIntervalSection">
             <div class="setting-input-header">
               <label class="setting-label">单页停留时长</label>
@@ -77,7 +94,7 @@ export class FlipBar {
             <input type="range" class="size-slider" id="flipIntervalSlider" min="2" max="120" step="1" value="${intervalSec}">
           </div>
 
-          <!-- 平滑滚动速率 -->
+          <!-- 平滑滚动速率 (仅在匀速滚动模式下呈现) -->
           <div class="setting-item ${mode === 'scroll' ? '' : 'hidden'}" id="scrollSpeedSection">
             <div class="setting-input-header">
               <label class="setting-label">平滑滚动速率</label>
@@ -131,9 +148,10 @@ export class FlipBar {
       this.container.querySelector('#flipSettingsPopover')?.classList.remove('open');
     });
 
-    this.container.querySelectorAll('.seg-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const m = btn.dataset.mode;
+    // 点击模式卡片切换模式
+    this.container.querySelectorAll('.flip-mode-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const m = card.dataset.mode;
         this.controller.setMode(m);
         this.render();
         this.bindEvents();
@@ -148,6 +166,7 @@ export class FlipBar {
         this.controller.setIntervalSec(v);
         const slider = this.container.querySelector('#flipIntervalSlider');
         if (slider) slider.value = Math.min(Math.max(v, 2), 120);
+        this.updateCapsuleText();
       }
     });
 
@@ -166,6 +185,7 @@ export class FlipBar {
         this.controller.setScrollSpeed(v);
         const spdSlider = this.container.querySelector('#scrollSpeedSlider');
         if (spdSlider) spdSlider.value = Math.min(Math.max(v, 10), 150);
+        this.updateCapsuleText();
       }
     });
 
@@ -184,6 +204,7 @@ export class FlipBar {
     const slider = this.container.querySelector('#flipIntervalSlider');
     if (numInput) numInput.value = safeSec;
     if (slider) slider.value = Math.min(Math.max(safeSec, 2), 120);
+    this.updateCapsuleText();
   }
 
   updateScrollSpeed(speed) {
@@ -193,6 +214,21 @@ export class FlipBar {
     const slider = this.container.querySelector('#scrollSpeedSlider');
     if (numInput) numInput.value = safeSpeed;
     if (slider) slider.value = Math.min(Math.max(safeSpeed, 10), 150);
+    this.updateCapsuleText();
+  }
+
+  updateCapsuleText() {
+    const isRunning = appState.get('isAutoFlipping');
+    if (isRunning) return;
+
+    const mode = appState.get('autoFlipMode');
+    const intervalSec = appState.get('flipIntervalSec');
+    const scrollSpeed = appState.get('scrollSpeed');
+    const counter = this.container.querySelector('#flipTimeCounter');
+
+    if (counter) {
+      counter.textContent = mode === 'flip' ? `定时翻页: ${intervalSec}s` : `平滑滚动: ${scrollSpeed}px/s`;
+    }
   }
 
   updateProgress(progress, remainingSec) {
@@ -201,7 +237,10 @@ export class FlipBar {
     const icon = this.container.querySelector('#flipCenterIcon');
 
     if (isRunning) {
-      if (counter) counter.textContent = `剩余 ${remainingSec}s`;
+      const mode = appState.get('autoFlipMode');
+      if (counter) {
+        counter.textContent = mode === 'flip' ? `剩余 ${remainingSec}s` : `滚动中...`;
+      }
       if (icon) icon.textContent = '⏸';
     }
   }
@@ -225,7 +264,7 @@ export class FlipBar {
 
     const counter = this.container.querySelector('#flipTimeCounter');
     if (counter && !isRunning) {
-      counter.textContent = mode === 'flip' ? `翻页 ${intervalSec}s` : `滚动 ${scrollSpeed}px`;
+      counter.textContent = mode === 'flip' ? `定时翻页: ${intervalSec}s` : `平滑滚动: ${scrollSpeed}px/s`;
     }
   }
 }
