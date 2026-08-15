@@ -45,7 +45,7 @@
   font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
-  max-width: 280px;
+  max-width: 260px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -57,10 +57,11 @@
 }
 
 .topbar-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
+
 .page-nav-controls {
   display: flex;
   align-items: center;
@@ -89,6 +90,105 @@
   color: var(--text-primary);
   min-width: 50px;
   text-align: center;
+}
+
+/* 顶部内嵌定时翻页控件 */
+.topbar-flip-widget {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 2px 6px 2px 4px;
+  gap: 6px;
+  position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.topbar-flip-widget.running {
+  border-color: var(--accent-primary, #1a56db);
+  box-shadow: 0 0 10px rgba(26, 86, 219, 0.2);
+  background-color: var(--accent-light, #e0e7ff);
+}
+
+.topbar-flip-play-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+}
+.topbar-flip-play-btn:hover {
+  background-color: var(--bg-surface);
+}
+.flip-play-icon {
+  font-size: 12px;
+  color: var(--accent-primary, #1a56db);
+}
+.flip-play-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.topbar-flip-stepper {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.flip-step-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flip-step-btn:hover {
+  background-color: var(--border-color);
+}
+
+.topbar-flip-gear-btn {
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+/* 顶部翻谱下拉设置弹窗 */
+.topbar-flip-popover {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 14px;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 90;
+}
+.topbar-flip-popover.open {
+  display: flex;
+}
+.flip-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .topbar-right {

@@ -26,9 +26,13 @@ export class ScoreReader {
   }
 
   initResizeObserver() {
+    let resizeTimer = null;
     this.resizeObserver = new ResizeObserver(() => {
       if (this.currentScore) {
-        this.renderCurrentLayout();
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+          this.renderCurrentLayout();
+        }, 150);
       }
     });
     this.resizeObserver.observe(this.container);
@@ -43,7 +47,6 @@ export class ScoreReader {
     score.lastReadTime = Date.now();
     scoreDB.saveScore(score);
 
-    // 实例化对应格式渲染器
     if (this.renderer) {
       this.renderer.destroy();
     }
@@ -72,15 +75,16 @@ export class ScoreReader {
   }
 
   async renderCurrentLayout() {
-    if (!this.currentScore) return;
+    if (!this.currentScore || !this.renderer) return;
     this.clearStrokes();
     this.container.innerHTML = '';
 
-    const containerWidth = this.container.clientWidth || 800;
+    // 安全计算容器有效宽度
+    const rawWidth = this.container.clientWidth;
+    const containerWidth = rawWidth > 200 ? rawWidth : Math.max(window.innerWidth - 32, 600);
     const mode = this.layoutMode;
 
     if (this.currentScore.format === 'xml') {
-      // MusicXML 专用渲染排版
       const pageWrapper = document.createElement('div');
       pageWrapper.className = 'score-page-wrapper xml-page-wrapper';
       const xmlContainer = document.createElement('div');
@@ -94,7 +98,6 @@ export class ScoreReader {
 
       await this.renderer.load(this.currentScore.fileBlob || this.currentScore.fileData, xmlContainer);
 
-      // 绑定手写笔图层
       setTimeout(async () => {
         const w = pageWrapper.clientWidth || 800;
         const h = pageWrapper.clientHeight || 1100;
@@ -109,7 +112,6 @@ export class ScoreReader {
           }
         });
 
-        // 加载已保存笔迹
         const savedStrokes = await scoreDB.getPageAnnotations(this.currentScore.id, 0);
         strokeRenderer.loadStrokes(savedStrokes);
         this.strokeRenderers.set(0, strokeRenderer);
@@ -118,25 +120,23 @@ export class ScoreReader {
       return;
     }
 
-    // PDF 和 图片乐谱渲染
+    // PDF 与 图片乐谱排版
     if (mode === 'double' && this.totalPages > 1) {
-      // 双页并排模式 (适合平板横屏)
+      // 双页并排模式 (适合平板横屏多页)
       const doubleContainer = document.createElement('div');
       doubleContainer.className = 'score-double-container';
 
       const leftPageIndex = this.currentPage % 2 === 0 ? this.currentPage : this.currentPage - 1;
       const rightPageIndex = leftPageIndex + 1;
 
-      const pageWidth = (containerWidth - 40) / 2;
+      const pageWidth = Math.floor((containerWidth - 48) / 2);
 
-      // 左页
       const leftPageEl = await this.createPageElement(leftPageIndex, pageWidth);
-      doubleContainer.appendChild(leftPageEl);
+      if (leftPageEl) doubleContainer.appendChild(leftPageEl);
 
-      // 右页 (如果存在)
       if (rightPageIndex < this.totalPages) {
         const rightPageEl = await this.createPageElement(rightPageIndex, pageWidth);
-        doubleContainer.appendChild(rightPageEl);
+        if (rightPageEl) doubleContainer.appendChild(rightPageEl);
       }
 
       this.container.appendChild(doubleContainer);
@@ -145,17 +145,20 @@ export class ScoreReader {
       const scrollContainer = document.createElement('div');
       scrollContainer.className = 'score-scroll-container';
 
+      const pageWidth = Math.min(containerWidth - 32, 960);
       for (let i = 0; i < this.totalPages; i++) {
-        const pageEl = await this.createPageElement(i, containerWidth - 40);
-        scrollContainer.appendChild(pageEl);
+        const pageEl = await this.createPageElement(i, pageWidth);
+        if (pageEl) scrollContainer.appendChild(pageEl);
       }
       this.container.appendChild(scrollContainer);
     } else {
-      // 单页模式
+      // 单页模式 (居中且自适应最大可读宽度)
       const singleContainer = document.createElement('div');
       singleContainer.className = 'score-single-container';
-      const pageEl = await this.createPageElement(this.currentPage, containerWidth - 40);
-      singleContainer.appendChild(pageEl);
+
+      const pageWidth = Math.min(containerWidth - 32, 960);
+      const pageEl = await this.createPageElement(this.currentPage, pageWidth);
+      if (pageEl) singleContainer.appendChild(pageEl);
       this.container.appendChild(singleContainer);
     }
 
@@ -187,7 +190,6 @@ export class ScoreReader {
       penCanvas.style.width = `${renderInfo.width}px`;
       penCanvas.style.height = `${renderInfo.height}px`;
 
-      // 绑定手写笔图层
       const strokeRenderer = new StrokeRenderer(penCanvas, {
         scoreId: this.currentScore.id,
         pageIndex: pageIndex,
@@ -196,7 +198,6 @@ export class ScoreReader {
         }
       });
 
-      // 从 IndexedDB 读取该页历史笔迹
       const savedStrokes = await scoreDB.getPageAnnotations(this.currentScore.id, pageIndex);
       strokeRenderer.loadStrokes(savedStrokes);
 
@@ -227,7 +228,7 @@ export class ScoreReader {
   // ================= 翻页与定位控制 =================
 
   async nextPage() {
-    const step = this.layoutMode === 'double' ? 2 : 1;
+    const step = (this.layoutMode === 'double' && this.totalPages > 1) ? 2 : 1;
     if (this.currentPage + step < this.totalPages) {
       this.currentPage += step;
       appState.set({ currentPage: this.currentPage });
@@ -238,7 +239,7 @@ export class ScoreReader {
   }
 
   async prevPage() {
-    const step = this.layoutMode === 'double' ? 2 : 1;
+    const step = (this.layoutMode === 'double' && this.totalPages > 1) ? 2 : 1;
     if (this.currentPage - step >= 0) {
       this.currentPage = Math.max(0, this.currentPage - step);
       appState.set({ currentPage: this.currentPage });
@@ -273,19 +274,16 @@ export class ScoreReader {
     this.strokeRenderers.clear();
   }
 
-  // 撤销当前页手写笔迹
   undoCurrentPage() {
     const sr = this.strokeRenderers.get(this.currentPage);
     if (sr) sr.undo();
   }
 
-  // 重做当前页手写笔迹
   redoCurrentPage() {
     const sr = this.strokeRenderers.get(this.currentPage);
     if (sr) sr.redo();
   }
 
-  // 清空当前页手写笔迹
   clearCurrentPage() {
     const sr = this.strokeRenderers.get(this.currentPage);
     if (sr) sr.clear();

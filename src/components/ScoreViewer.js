@@ -1,7 +1,6 @@
 /**
  * 乐谱阅读与演奏主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部演奏控制条、单/双页排版切换、手写笔工具箱与翻谱悬浮条
- * 具备双向畅快进出演奏模式、手写笔工具箱折叠隐藏等全套交互
+ * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页）、单/双页排版切换与手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -36,7 +35,7 @@ export class ScoreViewer {
   render() {
     this.container.innerHTML = `
       <div class="score-viewer-layout">
-        <!-- 顶部紧凑演奏工具栏 -->
+        <!-- 顶部紧凑演奏工具栏 (全功能集成) -->
         <header class="reader-topbar" id="readerTopbar">
           <div class="topbar-left">
             <button class="btn btn-ghost topbar-back-btn" id="readerBackBtn" title="返回乐谱库">
@@ -56,6 +55,9 @@ export class ScoreViewer {
               <span class="page-indicator" id="pageIndicator">1 / 1</span>
               <button class="nav-arrow-btn" id="nextPageBtn" title="下一页 (右踏板/PageDown)">▶</button>
             </div>
+
+            <!-- 内嵌顶部工具栏的定时翻页控制器 -->
+            <div id="topbarFlipSlot"></div>
           </div>
 
           <div class="topbar-right">
@@ -106,9 +108,6 @@ export class ScoreViewer {
 
         <!-- 浮动手写笔工具箱容器 -->
         <div class="floating-pen-container" id="floatingPenContainer"></div>
-
-        <!-- 浮动自动翻谱控制台容器 -->
-        <div class="floating-flip-container" id="floatingFlipContainer"></div>
       </div>
     `;
 
@@ -126,9 +125,11 @@ export class ScoreViewer {
     const penContainer = this.container.querySelector('#floatingPenContainer');
     this.penToolbox = new PenToolbox(penContainer, this.reader);
 
-    // 挂载自动翻谱悬浮台
-    const flipContainer = this.container.querySelector('#floatingFlipContainer');
-    this.flipBar = new FlipBar(flipContainer, this.autoFlip);
+    // 挂载顶部内嵌定时翻页控制器
+    const flipSlot = this.container.querySelector('#topbarFlipSlot');
+    if (flipSlot) {
+      this.flipBar = new FlipBar(flipSlot, this.autoFlip);
+    }
   }
 
   setStageMode(active) {
@@ -140,7 +141,7 @@ export class ScoreViewer {
     if (active) {
       topbar?.classList.add('hidden-bar');
       if (exitBtn) exitBtn.style.display = 'flex';
-      if (penContainer) penContainer.style.display = 'none'; // 演奏模式下自动隐藏批注工具栏
+      if (penContainer) penContainer.style.display = 'none';
       wakeLockManager.request();
     } else {
       topbar?.classList.remove('hidden-bar');
@@ -166,7 +167,7 @@ export class ScoreViewer {
       this.reader.nextPage();
     });
 
-    // 屏幕边缘触控热区 (平板演奏极致便利)
+    // 触控热区
     this.container.querySelector('#hotzoneLeft')?.addEventListener('click', () => {
       this.reader.prevPage();
     });
@@ -175,13 +176,12 @@ export class ScoreViewer {
     });
     this.container.querySelector('#hotzoneCenter')?.addEventListener('click', () => {
       if (this.isStageMode) {
-        // 在演奏模式下点击中央呼出/隐藏顶部栏
         const topbar = this.container.querySelector('#readerTopbar');
         topbar?.classList.toggle('hidden-bar');
       }
     });
 
-    // 手写批注一键开关
+    // 手写批注开关
     this.container.querySelector('#togglePenToolboxBtn')?.addEventListener('click', () => {
       this.penToolbox.toggle();
     });
@@ -195,7 +195,7 @@ export class ScoreViewer {
       });
     });
 
-    // 导出带笔记乐谱
+    // 导出
     this.container.querySelector('#exportScoreBtn')?.addEventListener('click', async () => {
       const stage = this.container.querySelector('#scorePagesStage');
       const pageWrapper = stage.querySelector('.score-page-wrapper');
@@ -204,7 +204,7 @@ export class ScoreViewer {
       await exportCurrentPageAsImage(pageWrapper, `${title}_批注版.png`);
     });
 
-    // 主题轮转切换
+    // 主题切换
     this.container.querySelector('#themeCycleBtn')?.addEventListener('click', () => {
       const themes = ['parchment', 'dark', 'light'];
       const cur = appState.get('theme') || 'parchment';
@@ -212,7 +212,7 @@ export class ScoreViewer {
       appState.set({ theme: next });
     });
 
-    // 进入舞台演奏模式
+    // 进入演奏模式
     this.container.querySelector('#stageModeBtn')?.addEventListener('click', () => {
       this.setStageMode(true);
     });
@@ -222,7 +222,7 @@ export class ScoreViewer {
       this.setStageMode(false);
     });
 
-    // 键盘快捷键监听 (Escape 退出演奏, 空格/箭头翻页)
+    // 键盘监听
     window.addEventListener('keydown', (e) => {
       if (appState.get('currentView') !== 'reader') return;
       if (e.key === 'Escape' && this.isStageMode) {
@@ -252,18 +252,13 @@ export class ScoreViewer {
       `;
     }
 
+    // 默认判断：若有多页且为横屏，使用双页，否则使用单页
     const isLandscape = window.innerWidth > window.innerHeight;
-    if (isLandscape && score.format !== 'xml') {
-      this.reader.setLayoutMode('double');
-      this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
-        b.classList.toggle('active', b.dataset.layout === 'double');
-      });
-    } else {
-      this.reader.setLayoutMode('single');
-      this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
-        b.classList.toggle('active', b.dataset.layout === 'single');
-      });
-    }
+    const initialMode = (isLandscape && (score.pageCount > 1 || score.format === 'pdf')) ? 'single' : 'single';
+    this.reader.setLayoutMode(initialMode);
+    this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
+      b.classList.toggle('active', b.dataset.layout === initialMode);
+    });
 
     try {
       await this.reader.loadScore(score);

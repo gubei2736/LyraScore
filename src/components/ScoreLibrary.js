@@ -406,23 +406,18 @@ export class ScoreLibrary {
 
       if (ext === 'pdf') {
         format = 'pdf';
-        // 读取为持久化 DataURL，确保 IndexedDB 安全存储且跨端 100% 兼容
-        const reader = new FileReader();
-        const dataUrl = await new Promise((res) => {
-          reader.onload = () => res(reader.result);
-          reader.readAsDataURL(file);
-        });
-        fileData = dataUrl;
+        // 使用 ArrayBuffer 原生二进制存储，最安全且完全避免 Base64 编码损坏
+        const arrayBuf = await file.arrayBuffer();
+        fileData = arrayBuf;
 
-        // 生成 PDF 缩略图与页数提取
         try {
           const pdfR = new PdfScoreRenderer();
-          const info = await pdfR.load(dataUrl);
+          const info = await pdfR.load(arrayBuf);
           pageCount = info.numPages;
           coverUrl = await pdfR.generateThumbnail(300);
           pdfR.destroy();
         } catch (err) {
-          console.warn('生成 PDF 封面失败:', err);
+          console.warn('提取 PDF 封面失败:', err);
         }
       } else if (['xml', 'musicxml', 'mxl'].includes(ext)) {
         format = 'xml';
