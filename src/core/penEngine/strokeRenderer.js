@@ -1,6 +1,6 @@
 /**
- * StrokeRenderer - 顶级手写笔墨水渲染与图层控制器
- * 包含低延迟硬件直通、Perfect Freehand 笔锋生成、多笔刷、橡皮擦与历史栈
+ * StrokeRenderer - 专业手写笔墨水渲染与图层控制器
+ * 优化点采集与平滑算法，彻底消除长按误拉直Bug，完美呈现汉字与英文圆弧(如字母D)笔画
  */
 
 import { getStroke, renderStrokeToContext } from './perfectFreehand.js';
@@ -11,7 +11,7 @@ export class StrokeRenderer {
   constructor(canvasElement, options = {}) {
     this.canvas = canvasElement;
     this.ctx = canvasElement.getContext('2d', {
-      desynchronized: true, // 启用低延迟硬件直通管线
+      desynchronized: true,
       alpha: true
     });
 
@@ -22,26 +22,22 @@ export class StrokeRenderer {
       ...options
     };
 
-    // 当前笔刷配置
+    // 当前笔刷配置 (彻底禁用普通写字的长按变直线)
     this.brush = {
-      tool: 'fountain', // 'fountain' | 'ballpoint' | 'highlighter' | 'eraser' | 'stamp' | 'line' | 'text'
+      tool: 'fountain', // 'fountain' | 'ballpoint' | 'highlighter' | 'eraser' | 'stamp' | 'line'
       color: '#1a56db',
       size: 4,
       opacity: 1.0,
-      stamp: null, // 当前选中的音乐记号
-      snapToStraightLine: true // 是否开启长按直线自动吸附
+      stamp: null
     };
 
     // 矢量笔画列表与撤销重做栈
     this.strokes = [];
     this.undoStack = [];
 
-    // 当前正在绘制的笔画临时数据
+    // 当前笔画采样点
     this.currentRawPoints = [];
     this.isDrawing = false;
-    this.strokeStartTime = 0;
-    this.holdTimer = null;
-    this.isSnappedToLine = false;
 
     // 初始化防误触与触控事件
     this.palmManager = new PalmRejectionManager(this.canvas, {
@@ -70,12 +66,9 @@ export class StrokeRenderer {
 
   onPenDown(pt, originalEvent) {
     this.isDrawing = true;
-    this.isSnappedToLine = false;
-    this.strokeStartTime = Date.now();
-    this.currentRawPoints = [[pt.x, pt.y, pt.pressure]];
+    this.currentRawPoints = [[pt.x, pt.y, pt.pressure || 0.5]];
 
     if (this.brush.tool === 'stamp' && this.brush.stamp) {
-      // 印章模式：单次点击直接盖印
       const stampItem = {
         type: 'stamp',
         x: pt.x,
@@ -96,17 +89,6 @@ export class StrokeRenderer {
       this.eraseAtPoint(pt.x, pt.y, this.brush.size * 5);
       return;
     }
-
-    // 智能直线吸附长按计时器 (在同一位置停留 450ms 自动转为笔直直线)
-    if (this.brush.snapToStraightLine && (this.brush.tool === 'fountain' || this.brush.tool === 'highlighter' || this.brush.tool === 'ballpoint' || this.brush.tool === 'line')) {
-      clearTimeout(this.holdTimer);
-      this.holdTimer = setTimeout(() => {
-        if (this.isDrawing && this.currentRawPoints.length > 3) {
-          this.isSnappedToLine = true;
-          this.drawCurrentLive();
-        }
-      }, 450);
-    }
   }
 
   onPenMove(points, originalEvent) {
@@ -120,14 +102,13 @@ export class StrokeRenderer {
     }
 
     for (const pt of points) {
-      this.currentRawPoints.push([pt.x, pt.y, pt.pressure]);
+      this.currentRawPoints.push([pt.x, pt.y, pt.pressure || 0.5]);
     }
 
     this.drawCurrentLive();
   }
 
   onPenUp(pt, originalEvent) {
-    clearTimeout(this.holdTimer);
     if (!this.isDrawing) return;
     this.isDrawing = false;
 
@@ -140,11 +121,10 @@ export class StrokeRenderer {
 
     let finalPoints = this.currentRawPoints;
 
-    // 如果触发了直线吸附或当前是直线工具
-    if (this.isSnappedToLine || this.brush.tool === 'line') {
+    // 只有当明确选择了“直线”工具时，才强制拉直
+    if (this.brush.tool === 'line') {
       const p0 = finalPoints[0];
       const pn = finalPoints[finalPoints.length - 1];
-      // 线性生成几个等距点
       finalPoints = [
         [p0[0], p0[1], p0[2]],
         [p0[0] * 0.5 + pn[0] * 0.5, p0[1] * 0.5 + pn[1] * 0.5, 0.5],
@@ -160,17 +140,16 @@ export class StrokeRenderer {
       size: this.brush.size,
       opacity: this.brush.tool === 'highlighter' ? 0.45 : this.brush.opacity,
       points: finalPoints,
-      isStraight: this.isSnappedToLine || this.brush.tool === 'line'
+      isStraight: this.brush.tool === 'line'
     };
 
     this.addStroke(strokeItem);
     this.currentRawPoints = [];
-    this.isSnappedToLine = false;
   }
 
   addStroke(strokeItem) {
     this.strokes.push(strokeItem);
-    this.undoStack = []; // 清空重做栈
+    this.undoStack = [];
     this.redraw();
     this.options.onChange(this.strokes);
   }
@@ -208,10 +187,9 @@ export class StrokeRenderer {
         return Math.hypot(st.x - x, st.y - y) > radius + 15;
       }
       if (st.type === 'stroke' && st.points) {
-        // 检查任一点是否在橡皮擦圆形范围内
         for (const pt of st.points) {
           if (Math.hypot(pt[0] - x, pt[1] - y) < radius) {
-            return false; // 移除整条笔画
+            return false;
           }
         }
       }
@@ -228,7 +206,7 @@ export class StrokeRenderer {
     if (this.currentRawPoints.length < 1) return;
 
     let pointsToRender = this.currentRawPoints;
-    if (this.isSnappedToLine || this.brush.tool === 'line') {
+    if (this.brush.tool === 'line') {
       const p0 = pointsToRender[0];
       const pn = pointsToRender[pointsToRender.length - 1];
       pointsToRender = [
@@ -244,11 +222,11 @@ export class StrokeRenderer {
 
     const strokeOptions = {
       size: isHighlighter ? this.brush.size * 3.5 : this.brush.size,
-      thinning: isFountain ? 0.6 : 0.05,
-      smoothing: 0.65,
-      streamline: 0.45,
-      start: { taper: isFountain ? 15 : 0 },
-      end: { taper: isFountain ? 20 : 0 }
+      thinning: isFountain ? 0.45 : 0.0,
+      smoothing: 0.5,
+      streamline: 0.25, // 降低滞后系数，保持笔画拐弯处高灵敏度
+      start: { taper: isFountain ? 8 : 0 },
+      end: { taper: isFountain ? 10 : 0 }
     };
 
     const outline = getStroke(pointsToRender, strokeOptions);
@@ -272,11 +250,11 @@ export class StrokeRenderer {
 
         const strokeOptions = {
           size: isHighlighter ? item.size * 3.5 : item.size,
-          thinning: isFountain ? 0.6 : 0.05,
-          smoothing: 0.65,
-          streamline: 0.45,
-          start: { taper: isFountain ? 15 : 0 },
-          end: { taper: isFountain ? 20 : 0 }
+          thinning: isFountain ? 0.45 : 0.0,
+          smoothing: 0.5,
+          streamline: 0.25,
+          start: { taper: isFountain ? 8 : 0 },
+          end: { taper: isFountain ? 10 : 0 }
         };
 
         const outline = getStroke(item.points, strokeOptions);
