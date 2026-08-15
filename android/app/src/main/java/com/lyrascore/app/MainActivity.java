@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
         // 2. 初始化 WebView
         webView = new WebView(this);
         webView.setBackgroundColor(Color.parseColor("#fbf8f1")); // 羊皮纸护眼底色，杜绝闪白
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null); // 绑定 GPU 硬件加速光栅化管道
         setContentView(webView);
 
         // 3. 深度配置 WebSettings (放行本地离线文件跨域与 ES 脚本运行)

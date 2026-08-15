@@ -816,6 +816,11 @@
   max-width: 1400px;
   margin: 0 auto;
 }
+.score-pages-stage.gpu-accelerated-layer {
+  will-change: transform;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
 
 .score-single-container, .score-double-container {
   display: flex;

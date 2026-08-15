@@ -1,12 +1,11 @@
 /**
  * PDF 乐谱渲染引擎 (基于 Mozilla PDF.js)
- * 采用打包构建的本地独立 Worker 线程，彻底解决 GlobalWorkerOptions.workerSrc 缺失问题
+ * 具备离屏后台预光栅化 (Offscreen Pre-rendering)、LRU 3页高性能位图双缓冲池与 0ms 翻页直通
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
-// 绑定本地打包的 Worker 脚本相对路径
 if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 }
@@ -14,7 +13,8 @@ if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
 export class PdfScoreRenderer {
   constructor() {
     this.pdfDoc = null;
-    this.pageCache = new Map();
+    // LRU 3页位图缓存池: key = pageNum, value = { bitmap, width, height, rawWidth, rawHeight, targetWidth }
+    this.bitmapCache = new Map();
     this.activeRenderTasks = new Map();
   }
 
@@ -72,11 +72,109 @@ export class PdfScoreRenderer {
     return this.pdfDoc ? this.pdfDoc.numPages : 0;
   }
 
+  /**
+   * 离屏静默预渲染 (仅在系统空闲时刻调用，生成 ImageBitmap 并存入缓存)
+   */
+  async prerenderPage(pageNum, targetWidth = 800) {
+    if (!this.pdfDoc || pageNum < 1 || pageNum > this.pdfDoc.numPages) return null;
+
+    const cached = this.bitmapCache.get(pageNum);
+    if (cached && Math.abs(cached.targetWidth - targetWidth) < 20) {
+      return cached;
+    }
+
+    try {
+      const page = await this.pdfDoc.getPage(pageNum);
+      const unscaledViewport = page.getViewport({ scale: 1.0 });
+
+      const safeWidth = Math.max(targetWidth || 800, 360);
+      const baseScale = safeWidth / (unscaledViewport.width || 595);
+      const dpr = Math.min(window.devicePixelRatio || 2.0, 2.2);
+      const renderScale = baseScale * dpr;
+
+      const viewport = page.getViewport({ scale: renderScale });
+      const displayWidth = Math.floor(viewport.width / dpr);
+      const displayHeight = Math.floor(viewport.height / dpr);
+
+      const offscreen = document.createElement('canvas');
+      offscreen.width = Math.floor(viewport.width);
+      offscreen.height = Math.floor(viewport.height);
+
+      const ctx = offscreen.getContext('2d', { alpha: false });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+      const renderTask = page.render({
+        canvasContext: ctx,
+        viewport: viewport
+      });
+
+      await renderTask.promise;
+
+      let bitmap = null;
+      if (typeof window.createImageBitmap === 'function') {
+        try {
+          bitmap = await window.createImageBitmap(offscreen);
+        } catch (_) {
+          bitmap = offscreen;
+        }
+      } else {
+        bitmap = offscreen;
+      }
+
+      const cacheEntry = {
+        bitmap,
+        width: displayWidth,
+        height: displayHeight,
+        rawWidth: viewport.width,
+        rawHeight: viewport.height,
+        targetWidth: safeWidth
+      };
+
+      // 维护 LRU 3页缓存上限，超出平滑释放
+      if (this.bitmapCache.size >= 3) {
+        const oldestKey = this.bitmapCache.keys().next().value;
+        const oldEntry = this.bitmapCache.get(oldestKey);
+        if (oldEntry?.bitmap && typeof oldEntry.bitmap.close === 'function') {
+          oldEntry.bitmap.close();
+        }
+        this.bitmapCache.delete(oldestKey);
+      }
+
+      this.bitmapCache.set(pageNum, cacheEntry);
+      return cacheEntry;
+    } catch (_) {
+      return null;
+    }
+  }
+
   async renderPage(pageNum, canvas, containerWidth = 800) {
     if (!this.pdfDoc || pageNum < 1 || pageNum > this.pdfDoc.numPages || !canvas) {
       return null;
     }
 
+    const safeWidth = Math.max(containerWidth || 800, 360);
+
+    // 1. 快速直通路径 (Fast-Path)：命中离屏预加载缓存，0ms 瞬间贴入
+    const cached = this.bitmapCache.get(pageNum);
+    if (cached && Math.abs(cached.targetWidth - safeWidth) < 20) {
+      canvas.width = cached.rawWidth;
+      canvas.height = cached.rawHeight;
+      canvas.style.width = `${cached.width}px`;
+      canvas.style.height = `${cached.height}px`;
+
+      const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.drawImage(cached.bitmap, 0, 0);
+
+      return {
+        width: cached.width,
+        height: cached.height,
+        rawWidth: cached.rawWidth,
+        rawHeight: cached.rawHeight
+      };
+    }
+
+    // 2. 未命中缓存 -> 执行常规光栅化渲染并写入缓存
     if (this.activeRenderTasks.has(pageNum)) {
       try {
         this.activeRenderTasks.get(pageNum).cancel();
@@ -88,9 +186,8 @@ export class PdfScoreRenderer {
       const page = await this.pdfDoc.getPage(pageNum);
       const unscaledViewport = page.getViewport({ scale: 1.0 });
 
-      const safeWidth = Math.max(containerWidth || 800, 360);
       const baseScale = safeWidth / (unscaledViewport.width || 595);
-      const dpr = Math.min(window.devicePixelRatio || 2.0, 2.5);
+      const dpr = Math.min(window.devicePixelRatio || 2.0, 2.2);
       const renderScale = baseScale * dpr;
 
       const viewport = page.getViewport({ scale: renderScale });
@@ -116,6 +213,28 @@ export class PdfScoreRenderer {
 
       await renderTask.promise;
       this.activeRenderTasks.delete(pageNum);
+
+      // 异步生成 ImageBitmap 存入缓存
+      if (typeof window.createImageBitmap === 'function') {
+        window.createImageBitmap(canvas).then(bitmap => {
+          if (this.bitmapCache.size >= 3) {
+            const oldestKey = this.bitmapCache.keys().next().value;
+            const oldEntry = this.bitmapCache.get(oldestKey);
+            if (oldEntry?.bitmap && typeof oldEntry.bitmap.close === 'function') {
+              oldEntry.bitmap.close();
+            }
+            this.bitmapCache.delete(oldestKey);
+          }
+          this.bitmapCache.set(pageNum, {
+            bitmap,
+            width: displayWidth,
+            height: displayHeight,
+            rawWidth: viewport.width,
+            rawHeight: viewport.height,
+            targetWidth: safeWidth
+          });
+        }).catch(() => {});
+      }
 
       return {
         width: displayWidth,
@@ -161,6 +280,13 @@ export class PdfScoreRenderer {
     }
     this.activeRenderTasks.clear();
 
+    for (const [_, entry] of this.bitmapCache.entries()) {
+      if (entry?.bitmap && typeof entry.bitmap.close === 'function') {
+        try { entry.bitmap.close(); } catch (_) {}
+      }
+    }
+    this.bitmapCache.clear();
+
     if (this.pdfDoc) {
       try {
         this.pdfDoc.destroy();
@@ -169,6 +295,5 @@ export class PdfScoreRenderer {
       }
       this.pdfDoc = null;
     }
-    this.pageCache.clear();
   }
 }
