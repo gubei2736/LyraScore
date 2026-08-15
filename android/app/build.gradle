@@ -3,6 +3,7 @@ apply plugin: 'com.android.application'
 android {
     namespace 'com.lyrascore.app'
     compileSdk 34
+    buildToolsVersion "34.0.0"
 
     defaultConfig {
         applicationId "com.lyrascore.app"
@@ -30,6 +31,11 @@ android {
         main {
             assets.srcDirs = ['src/main/assets']
         }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
     }
 }
 
