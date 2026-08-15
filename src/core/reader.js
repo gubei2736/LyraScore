@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、手势穿透与原生垂直顺畅滚动支持
+ * 具备防循环闪烁保护、手势穿透、双指平滑缩放与带弹性阻尼感的手势翻页引擎
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -26,7 +26,7 @@ export class ScoreReader {
     this.isRendering = false;
 
     this.initWindowResizeListener();
-    this.initPinchZoom();
+    this.initGesturesAndDampedFlip();
   }
 
   initWindowResizeListener() {
@@ -44,36 +44,106 @@ export class ScoreReader {
     });
   }
 
-  initPinchZoom() {
+  initGesturesAndDampedFlip() {
+    let startX = 0, startY = 0;
+    let currentX = 0, currentY = 0;
+    let isSwiping = false;
+    let isMultiTouch = false;
     let initialDistance = 0;
     let initialScale = 1.0;
 
-    const getDistance = (touch1, touch2) => {
-      const dx = touch1.clientX - touch2.clientX;
-      const dy = touch1.clientY - touch2.clientY;
+    const getDistance = (t1, t2) => {
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
       return Math.sqrt(dx * dx + dy * dy);
     };
 
-    this.viewportEl?.addEventListener('touchstart', (e) => {
+    const vp = this.viewportEl;
+    if (!vp) return;
+
+    vp.addEventListener('touchstart', (e) => {
+      if (appState.get('isPenActive')) return; // 手写笔模式下不拦截
+
       if (e.touches.length === 2) {
+        isMultiTouch = true;
+        isSwiping = false;
         initialDistance = getDistance(e.touches[0], e.touches[1]);
         initialScale = this.zoomScale;
+        return;
+      }
+
+      if (e.touches.length === 1) {
+        isMultiTouch = false;
+        isSwiping = true;
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        currentX = startX;
+        currentY = startY;
+        this.container.style.transition = 'none';
       }
     }, { passive: true });
 
-    this.viewportEl?.addEventListener('touchmove', (e) => {
-      if (e.touches.length === 2 && initialDistance > 0) {
-        const currentDistance = getDistance(e.touches[0], e.touches[1]);
-        const scaleChange = currentDistance / initialDistance;
-        let newScale = Math.min(Math.max(initialScale * scaleChange, 0.6), 2.8);
-        this.container.style.transform = `scale(${newScale})`;
+    vp.addEventListener('touchmove', (e) => {
+      if (appState.get('isPenActive')) return;
+
+      if (isMultiTouch && e.touches.length === 2 && initialDistance > 0) {
+        const dist = getDistance(e.touches[0], e.touches[1]);
+        const scale = Math.min(Math.max(initialScale * (dist / initialDistance), 0.6), 2.8);
+        this.container.style.transform = `scale(${scale})`;
         this.container.style.transformOrigin = 'top center';
+        return;
+      }
+
+      if (isSwiping && e.touches.length === 1) {
+        currentX = e.touches[0].clientX;
+        currentY = e.touches[0].clientY;
+        const deltaX = currentX - startX;
+        const deltaY = currentY - startY;
+
+        // 横向滑动手势带阻尼位移 (阻尼系数 0.35)
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 15) {
+          const dampedX = deltaX * 0.35;
+          this.container.style.transform = `scale(${this.zoomScale}) translateX(${dampedX}px)`;
+        }
       }
     }, { passive: true });
 
-    this.viewportEl?.addEventListener('touchend', (e) => {
-      if (e.touches.length < 2 && initialDistance > 0) {
-        initialDistance = 0;
+    vp.addEventListener('touchend', async (e) => {
+      if (appState.get('isPenActive')) return;
+
+      if (isMultiTouch && e.touches.length < 2) {
+        isMultiTouch = false;
+        return;
+      }
+
+      if (isSwiping) {
+        isSwiping = false;
+        const deltaX = currentX - startX;
+        const deltaY = currentY - startY;
+        const threshold = 55; // 触发翻页的滑动阈值
+
+        this.container.style.transition = 'transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)';
+
+        if (deltaX < -threshold) {
+          // 向左滑 -> 下一页 (阻尼滑出动效)
+          this.container.style.transform = `scale(${this.zoomScale}) translateX(-80px)`;
+          setTimeout(async () => {
+            const hasNext = await this.nextPage();
+            this.container.style.transition = 'none';
+            this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
+          }, 150);
+        } else if (deltaX > threshold) {
+          // 向右滑 -> 上一页 (阻尼滑出动效)
+          this.container.style.transform = `scale(${this.zoomScale}) translateX(80px)`;
+          setTimeout(async () => {
+            const hasPrev = await this.prevPage();
+            this.container.style.transition = 'none';
+            this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
+          }, 150);
+        } else {
+          // 未达阈值 -> 弹性回弹复位
+          this.container.style.transform = `scale(${this.zoomScale}) translateX(0)`;
+        }
       }
     }, { passive: true });
   }
@@ -126,6 +196,7 @@ export class ScoreReader {
     try {
       this.clearStrokes();
       this.container.innerHTML = '';
+      this.container.style.transition = 'none';
       this.container.style.transform = `scale(${this.zoomScale})`;
       this.container.style.transformOrigin = 'top center';
 
@@ -256,7 +327,6 @@ export class ScoreReader {
     const stamp = appState.get('currentStamp');
 
     for (const [pageIndex, sr] of this.strokeRenderers.entries()) {
-      // 关键：非手写模式完全穿透，支持手指顺畅上下滑动
       sr.canvas.style.pointerEvents = isPenActive ? 'auto' : 'none';
       sr.canvas.style.touchAction = isPenActive ? 'none' : 'auto';
       sr.setBrush({

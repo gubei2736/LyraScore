@@ -1,5 +1,5 @@
 /**
- * 乐谱阅读与演奏主视图 (ScoreViewer Component)
+ * 乐谱阅读与专注模式主视图 (ScoreViewer Component)
  * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页与缩放微调）、单/双页排版与自由拖拽手写笔工具箱
  */
 
@@ -36,7 +36,7 @@ export class ScoreViewer {
   render() {
     this.container.innerHTML = `
       <div class="score-viewer-layout">
-        <!-- 顶部紧凑演奏工具栏 (精致流式对齐) -->
+        <!-- 顶部紧凑控制栏 -->
         <header class="reader-topbar" id="readerTopbar">
           <div class="topbar-left">
             <button class="btn btn-secondary btn-sm topbar-back-btn" id="readerBackBtn" title="返回乐谱库">
@@ -75,26 +75,26 @@ export class ScoreViewer {
               <button class="icon-toggle-btn" data-layout="double" id="btnDoublePage" title="双页并排模式 (仅横屏可用)">📖</button>
             </div>
 
-            <!-- 主题切换 -->
-            <button class="btn btn-ghost btn-sm" id="themeCycleBtn" title="切换演奏色调 (羊皮纸/深色/纯白)">
-              🎨 <span class="btn-label-text">主题</span>
+            <!-- 主题切换 (纯汉字无图标) -->
+            <button class="btn btn-ghost btn-sm" id="themeCycleBtn" title="切换阅读色调 (羊皮纸/深色/纯白)">
+              主题
             </button>
 
-            <!-- 舞台沉浸演奏模式 (全屏+防息屏) -->
-            <button class="btn btn-primary btn-sm stage-mode-btn" id="stageModeBtn" title="开启舞台沉浸全屏演奏">
-              🎭 <span class="btn-label-text">演奏</span>
+            <!-- 专注模式 (沉浸全屏+防息屏) -->
+            <button class="btn btn-primary btn-sm stage-mode-btn" id="stageModeBtn" title="开启全屏专注沉浸阅读">
+              专注模式
             </button>
           </div>
         </header>
 
-        <!-- 演奏模式下常驻的微型半透明退出胶囊按钮 -->
-        <button class="floating-stage-exit-pill" id="floatingExitStageBtn" style="display: none;" title="点击退出演奏模式">
-          ✕ 退出演奏
+        <!-- 专注模式下常驻的微型半透明退出胶囊按钮 -->
+        <button class="floating-stage-exit-pill" id="floatingExitStageBtn" style="display: none;" title="点击退出专注模式">
+          ✕ 退出专注
         </button>
 
-        <!-- 核心乐谱阅读视口 (支持原生上下顺畅滑动) -->
+        <!-- 核心乐谱阅读视口 (支持手势阻尼滑动与垂直顺畅滚动) -->
         <main class="score-viewport-container" id="scoreViewport">
-          <!-- 左右触控翻页微型热区 (仅两端窄条) -->
+          <!-- 左右触控翻页微型热区 -->
           <div class="touch-hotzone hotzone-left" id="hotzoneLeft" title="上一页"></div>
           <div class="touch-hotzone hotzone-center" id="hotzoneCenter" title="唤出/隐藏工具栏"></div>
           <div class="touch-hotzone hotzone-right" id="hotzoneRight" title="下一页"></div>
@@ -135,7 +135,6 @@ export class ScoreViewer {
       const doubleBtn = this.container.querySelector('#btnDoublePage');
 
       if (!isLandscape) {
-        // 竖屏：强制单页，禁用双页
         if (doubleBtn) {
           doubleBtn.disabled = true;
           doubleBtn.classList.add('disabled-btn');
@@ -146,7 +145,6 @@ export class ScoreViewer {
           b.classList.toggle('active', b.dataset.layout === 'single');
         });
       } else {
-        // 横屏：启用双页
         if (doubleBtn) {
           doubleBtn.disabled = false;
           doubleBtn.classList.remove('disabled-btn');
@@ -249,12 +247,12 @@ export class ScoreViewer {
       appState.set({ theme: next });
     });
 
-    // 进入演奏模式
+    // 进入专注模式
     this.container.querySelector('#stageModeBtn')?.addEventListener('click', () => {
       this.setStageMode(true);
     });
 
-    // 退出演奏模式
+    // 退出专注模式
     this.container.querySelector('#floatingExitStageBtn')?.addEventListener('click', () => {
       this.setStageMode(false);
     });
