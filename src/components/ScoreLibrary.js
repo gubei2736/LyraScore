@@ -2,13 +2,14 @@
  * 乐谱库与分类中心 (ScoreLibrary Component)
  * 包含现代乐谱网格、可折叠侧边栏、调式分类、纯净标签分类、搜索与文件导入
  * 按钮全量汉字化：开始阅读 / 副本 / 编辑 / 删除
- * 完美支持 PDF / MusicXML (.xml) / 压缩包 (.mxl) / 图片
+ * 采用现代高保真模态确认弹窗，告别早期安卓原生对话框
  */
 
 import { scoreDB } from '../core/db.js';
 import { KEY_SIGNATURES } from '../core/state.js';
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
 import { XmlScoreRenderer } from '../renderers/xmlRenderer.js';
+import { showConfirmDialog } from './ConfirmModal.js';
 
 export class ScoreLibrary {
   constructor(containerElement, options = {}) {
@@ -414,9 +415,18 @@ export class ScoreLibrary {
         this.renderScoreGrid();
       });
 
+      // 使用现代高保真确认弹窗替代早期安卓风格弹窗
       card.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (confirm(`确定要删除乐谱《${score.title}》吗？其所有手写笔迹也将被移除。`)) {
+        const confirmed = await showConfirmDialog({
+          title: '删除乐谱',
+          message: `确定要删除乐谱《${score.title}》吗？其关联的所有手写批注与练习笔记也将被一并移除。此操作不可恢复。`,
+          confirmText: '确认删除',
+          cancelText: '取消',
+          isDanger: true
+        });
+
+        if (confirmed) {
           await scoreDB.deleteScore(score.id);
           await this.loadScores();
         }

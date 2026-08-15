@@ -3,11 +3,13 @@
  * 具备：
  * 1. 极致半透明水晶毛玻璃悬浮胶囊
  * 2. 全屏自由拖拽任意移动位置
- * 3. 智能视口边界避让算法 + 原始锚点精准记忆还原 (打开避让防截断，关闭绝对复位原位)
+ * 3. 智能视口边界避让算法 + 原始锚点精准记忆还原
+ * 4. 接入现代高保真确认对话框，彻底告别早期安卓原生弹窗
  */
 
 import { MUSICAL_STAMPS } from '../core/penEngine/stamps.js';
 import { appState } from '../core/state.js';
+import { showConfirmDialog } from './ConfirmModal.js';
 
 export class PenToolbox {
   constructor(containerElement, scoreReader) {
@@ -52,7 +54,6 @@ export class PenToolbox {
     }
 
     if (this.isExpanded) {
-      // 展开时：记录当前胶囊位置为用户锚点，并计算屏幕边界安全避让
       if (this.userAnchorLeft === null) {
         const r = this.container.getBoundingClientRect();
         this.userAnchorLeft = r.left;
@@ -60,7 +61,6 @@ export class PenToolbox {
       }
       this.adjustPositionForExpandedPanel();
     } else {
-      // 关闭/收起时：严格复位到用户最初放置的原始坐标，绝不发生任何位移
       this.restoreUserAnchorPosition();
     }
 
@@ -78,19 +78,15 @@ export class PenToolbox {
       let safeLeft = this.userAnchorLeft !== null ? this.userAnchorLeft : rect.left;
       let safeTop = this.userAnchorTop !== null ? this.userAnchorTop : rect.top;
 
-      // 右边缘避让
       if (safeLeft + panelWidth > window.innerWidth - 12) {
         safeLeft = window.innerWidth - panelWidth - 12;
       }
-      // 左边缘避让
       if (safeLeft < 12) {
         safeLeft = 12;
       }
-      // 下边缘避让
       if (safeTop + panelHeight > window.innerHeight - 12) {
         safeTop = window.innerHeight - panelHeight - 12;
       }
-      // 上边缘避让
       if (safeTop < 56) {
         safeTop = 56;
       }
@@ -254,7 +250,6 @@ export class PenToolbox {
       container.style.left = `${newLeft}px`;
       container.style.top = `${newTop}px`;
 
-      // 实时记录用户设定的锚点
       this.userAnchorLeft = newLeft;
       this.userAnchorTop = newTop;
     };
@@ -335,8 +330,17 @@ export class PenToolbox {
     this.container.querySelector('#redoBtn')?.addEventListener('click', () => {
       this.reader.redoCurrentPage();
     });
-    this.container.querySelector('#clearBtn')?.addEventListener('click', () => {
-      if (confirm('确认清空当前页的所有手写笔迹吗？')) {
+
+    // 采用现代确认对话框替代原生 confirm
+    this.container.querySelector('#clearBtn')?.addEventListener('click', async () => {
+      const confirmed = await showConfirmDialog({
+        title: '清空当前页批注',
+        message: '确认清空当前页的所有手写笔迹吗？此操作无法撤销。',
+        confirmText: '确认清空',
+        cancelText: '取消',
+        isDanger: true
+      });
+      if (confirmed) {
         this.reader.clearCurrentPage();
       }
     });

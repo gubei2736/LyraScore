@@ -1,12 +1,13 @@
 /* ==========================================================================
-   LyraScore 弹窗与对话框样式
+   LyraScore 弹窗与现代高保真对话框样式
    ========================================================================== */
 
 .modal-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background-color: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -97,4 +98,115 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* ==========================================================================
+   全新现代高保真确认对话框 (Modern Custom Dialog)
+   ========================================================================== */
+
+.custom-dialog-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  opacity: 0;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.custom-dialog-overlay.visible {
+  opacity: 1;
+}
+
+.custom-dialog-card {
+  width: 90%;
+  max-width: 420px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.25);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transform: scale(0.92) translateY(12px);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.custom-dialog-overlay.visible .custom-dialog-card {
+  transform: scale(1) translateY(0);
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.dialog-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.dialog-icon-box.danger {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+.dialog-icon-box.info {
+  background-color: #e0e7ff;
+  color: #4f46e5;
+}
+
+.dialog-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.dialog-body {
+  padding: 0;
+}
+.dialog-message {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.dialog-cancel-btn {
+  padding: 8px 18px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.dialog-confirm-btn {
+  padding: 8px 20px;
+  font-size: 13px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.btn-danger {
+  background-color: #dc2626;
+  color: #ffffff;
+  border: 1px solid #b91c1c;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+  transition: all 0.15s ease;
+}
+.btn-danger:hover {
+  background-color: #b91c1c;
+}
+.btn-danger:active {
+  transform: scale(0.96);
 }
