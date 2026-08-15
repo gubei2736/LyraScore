@@ -1,12 +1,13 @@
 /**
  * 平板手写笔严格防误触与多点手势调度器 (Strict Palm Rejection & Gesture Dispatcher)
+ * 放通手指多点触控，手写笔绘制与手指双指缩放完美共存
  */
 
 export class PalmRejectionManager {
   constructor(canvasElement, options = {}) {
     this.canvas = canvasElement;
     this.options = {
-      onlyPenMode: true, // 仅允许手写笔画线，手指仅用于缩放和平移
+      onlyPenMode: true,
       onPenDown: options.onPenDown || (() => {}),
       onPenMove: options.onPenMove || (() => {}),
       onPenUp: options.onPenUp || (() => {}),
@@ -31,8 +32,6 @@ export class PalmRejectionManager {
 
   bindEvents() {
     const el = this.canvas;
-
-    // 禁用默认浏览器手势与右键
     el.style.touchAction = 'none';
 
     el.addEventListener('pointerdown', this.handlePointerDown.bind(this), { passive: false });
@@ -43,8 +42,8 @@ export class PalmRejectionManager {
 
   getPointerCoords(e) {
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
+    const scaleX = this.canvas.width / (rect.width || 1);
+    const scaleY = this.canvas.height / (rect.height || 1);
     return {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY,
@@ -56,83 +55,39 @@ export class PalmRejectionManager {
   }
 
   handlePointerDown(e) {
-    e.preventDefault();
-
     const isPen = e.pointerType === 'pen';
     const isMouse = e.pointerType === 'mouse';
     const isTouch = e.pointerType === 'touch';
 
-    // 1. 如果手写笔下笔，直接进入书写状态（即使有手掌贴在屏幕上也优先忽略手掌）
+    // 1. 手写笔模式：接管绘制并阻止默认事件
     if (isPen || (isMouse && e.button === 0) || (!this.options.onlyPenMode && isTouch)) {
       this.isPenDrawing = true;
-      this.canvas.setPointerCapture(e.pointerId);
+      try {
+        this.canvas.setPointerCapture(e.pointerId);
+      } catch (_) {}
+      e.preventDefault();
       const coords = this.getPointerCoords(e);
       this.options.onPenDown(coords, e);
       return;
     }
 
-    // 2. 触控模式 (用于多指平移与捏合缩放)
+    // 2. 手指触控模式：放通事件供全局缩放与翻页手势引擎处理，不随意 preventDefault
     if (isTouch) {
       this.activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      // 双指触控
-      if (this.activeTouches.size === 2) {
-        const touches = Array.from(this.activeTouches.values());
-        this.lastTouchDistance = Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y);
-        this.lastTouchCenter = {
-          x: (touches[0].x + touches[1].x) / 2,
-          y: (touches[0].y + touches[1].y) / 2
-        };
-
-        // 检查双指双击撤销
-        const now = Date.now();
-        if (now - this.lastTwoFingerTapTime < 300) {
-          this.options.onDoubleTapTwoFingers();
-          this.lastTwoFingerTapTime = 0;
-        } else {
-          this.lastTwoFingerTapTime = now;
-        }
-      }
     }
   }
 
   handlePointerMove(e) {
-    e.preventDefault();
-
     if (this.isPenDrawing) {
-      // 提取高采样率下的合并采样事件 (Coalesced Events)
+      e.preventDefault();
       const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
       const points = events.map(ev => this.getPointerCoords(ev));
       this.options.onPenMove(points, e);
       return;
     }
 
-    // 处理双指缩放与平移
     if (e.pointerType === 'touch' && this.activeTouches.has(e.pointerId)) {
       this.activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (this.activeTouches.size === 2) {
-        const touches = Array.from(this.activeTouches.values());
-        const currentDist = Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y);
-        const currentCenter = {
-          x: (touches[0].x + touches[1].x) / 2,
-          y: (touches[0].y + touches[1].y) / 2
-        };
-
-        if (this.lastTouchDistance && this.lastTouchDistance > 10) {
-          const zoomDelta = currentDist / this.lastTouchDistance;
-          this.options.onGestureZoom(zoomDelta, currentCenter);
-        }
-
-        if (this.lastTouchCenter) {
-          const dx = currentCenter.x - this.lastTouchCenter.x;
-          const dy = currentCenter.y - this.lastTouchCenter.y;
-          this.options.onGesturePan(dx, dy);
-        }
-
-        this.lastTouchDistance = currentDist;
-        this.lastTouchCenter = currentCenter;
-      }
     }
   }
 

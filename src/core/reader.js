@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、手势穿透、全局捕获双指平滑 Pinch-to-Zoom 缩放与实时手势诊断引擎
+ * 具备双通道 (Pointer & Touch) 全局多点触控捕获、Pinch-to-Zoom 平滑缩放与上下/左右阻尼翻页引擎
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -28,7 +28,7 @@ export class ScoreReader {
     this.onZoomChange = null;
 
     this.initWindowResizeListener();
-    this.initGesturesAndDampedFlip();
+    this.initDualChannelGestures();
   }
 
   initWindowResizeListener() {
@@ -46,59 +46,53 @@ export class ScoreReader {
     });
   }
 
-  initGesturesAndDampedFlip() {
-    let startX = 0, startY = 0;
-    let currentX = 0, currentY = 0;
+  initDualChannelGestures() {
+    // 维护全局触控点表
+    const activePointers = new Map();
+    let initialPinchDistance = 0;
+    let initialPinchScale = 1.0;
+    let isPinching = false;
+
+    // 单指滑动翻页记录
+    let swipeStartX = 0, swipeStartY = 0;
+    let swipeCurrentX = 0, swipeCurrentY = 0;
     let isSwiping = false;
-    let isMultiTouch = false;
-    let initialDistance = 0;
-    let initialScale = 1.0;
 
-    const getDistance = (t1, t2) => {
-      const dx = t1.clientX - t2.clientX;
-      const dy = t1.clientY - t2.clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    };
+    const getDistance = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
 
-    // 全局绑定手势，确保手指落在乐谱任何图层均能 100% 捕获
-    document.addEventListener('touchstart', (e) => {
+    const onPointerDown = (e) => {
       if (appState.get('currentView') !== 'reader') return;
-      if (appState.get('isPenActive')) return; // 手写笔模式下绘制优先
+      if (e.pointerType === 'pen') return; // 手写笔独立处理
 
-      const touchCount = e.touches.length;
-      console.log(`[Lyra-Touch] touchstart: touches=${touchCount}`);
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const count = activePointers.size;
 
-      // 检测到双指或多指触碰
-      if (touchCount >= 2) {
-        isMultiTouch = true;
+      if (count >= 2) {
+        isPinching = true;
         isSwiping = false;
-        initialDistance = getDistance(e.touches[0], e.touches[1]);
-        initialScale = this.zoomScale;
+        const pts = Array.from(activePointers.values());
+        initialPinchDistance = getDistance(pts[0], pts[1]);
+        initialPinchScale = this.zoomScale;
         this.container.style.transition = 'none';
 
         gestureDiagnostics.update({
-          touchCount,
-          initialDist: initialDistance,
-          currentDist: initialDistance,
+          touchCount: count,
+          initialDist: initialPinchDistance,
+          currentDist: initialPinchDistance,
           scale: this.zoomScale,
           state: '双指缩放就绪',
           target: e.target?.className || e.target?.tagName
-        }, e.touches);
+        }, pts.map(p => ({ clientX: p.x, clientY: p.y })));
         return;
       }
 
-      // 单指触碰
-      if (touchCount === 1) {
-        const target = e.target;
-        if (!this.viewportEl?.contains(target)) return;
-
-        isMultiTouch = false;
+      if (count === 1) {
+        isPinching = false;
         isSwiping = true;
-        initialDistance = 0;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        currentX = startX;
-        currentY = startY;
+        swipeStartX = e.clientX;
+        swipeStartY = e.clientY;
+        swipeCurrentX = swipeStartX;
+        swipeCurrentY = swipeStartY;
         this.container.style.transition = 'none';
 
         gestureDiagnostics.update({
@@ -106,35 +100,38 @@ export class ScoreReader {
           initialDist: 0,
           currentDist: 0,
           scale: this.zoomScale,
-          state: '单指触摸',
-          target: target.className || target.tagName
-        }, e.touches);
+          state: '单指触碰',
+          target: e.target?.className || e.target?.tagName
+        }, [{ clientX: e.clientX, clientY: e.clientY }]);
       }
-    }, { passive: false });
+    };
 
-    document.addEventListener('touchmove', (e) => {
+    const onPointerMove = (e) => {
       if (appState.get('currentView') !== 'reader') return;
-      if (appState.get('isPenActive')) return;
+      if (e.pointerType === 'pen') return;
 
-      const touchCount = e.touches.length;
+      if (activePointers.has(e.pointerId)) {
+        activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
 
-      // 1. 双指 Pinch-to-Zoom 动态缩放
-      if (touchCount >= 2) {
-        if (!isMultiTouch || initialDistance <= 0) {
-          isMultiTouch = true;
+      const count = activePointers.size;
+
+      // 1. 双指/多指 Pinch-to-Zoom 动态缩放
+      if (count >= 2) {
+        const pts = Array.from(activePointers.values());
+        const currentDist = getDistance(pts[0], pts[1]);
+
+        if (!isPinching || initialPinchDistance <= 0) {
+          isPinching = true;
           isSwiping = false;
-          initialDistance = getDistance(e.touches[0], e.touches[1]);
-          initialScale = this.zoomScale;
-          this.container.style.transition = 'none';
+          initialPinchDistance = currentDist;
+          initialPinchScale = this.zoomScale;
           return;
         }
 
-        if (e.cancelable) e.preventDefault();
-
-        const currentDist = getDistance(e.touches[0], e.touches[1]);
-        if (currentDist > 0 && initialDistance > 0) {
-          const ratio = currentDist / initialDistance;
-          const targetScale = Math.min(Math.max(initialScale * ratio, 0.5), 2.8);
+        if (initialPinchDistance > 0 && currentDist > 0) {
+          const ratio = currentDist / initialPinchDistance;
+          const targetScale = Math.min(Math.max(initialPinchScale * ratio, 0.5), 2.8);
           this.zoomScale = targetScale;
           this.container.style.transform = `scale(${targetScale})`;
           this.container.style.transformOrigin = 'top center';
@@ -143,26 +140,24 @@ export class ScoreReader {
             this.onZoomChange(this.zoomScale);
           }
 
-          console.log(`[Lyra-Touch] PinchZoom: dist=${Math.round(currentDist)}, ratio=${ratio.toFixed(2)}, scale=${targetScale.toFixed(2)}`);
-
           gestureDiagnostics.update({
-            touchCount,
-            initialDist: initialDistance,
-            currentDist,
+            touchCount: count,
+            initialDist: initialPinchDistance,
+            currentDist: currentDist,
             scale: targetScale,
             state: '双指缩放中',
             target: e.target?.className || e.target?.tagName
-          }, e.touches);
+          }, pts.map(p => ({ clientX: p.x, clientY: p.y })));
         }
         return;
       }
 
       // 2. 单指滑动手势阻尼位移
-      if (isSwiping && touchCount === 1) {
-        currentX = e.touches[0].clientX;
-        currentY = e.touches[0].clientY;
-        const deltaX = currentX - startX;
-        const deltaY = currentY - startY;
+      if (isSwiping && count === 1 && !appState.get('isPenActive')) {
+        swipeCurrentX = e.clientX;
+        swipeCurrentY = e.clientY;
+        const deltaX = swipeCurrentX - swipeStartX;
+        const deltaY = swipeCurrentY - swipeStartY;
 
         gestureDiagnostics.update({
           touchCount: 1,
@@ -171,7 +166,7 @@ export class ScoreReader {
           scale: this.zoomScale,
           state: `单指滑动 (dx:${Math.round(deltaX)}, dy:${Math.round(deltaY)})`,
           target: e.target?.className || e.target?.tagName
-        }, e.touches);
+        }, [{ clientX: e.clientX, clientY: e.clientY }]);
 
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
           if (Math.abs(deltaX) > 12) {
@@ -185,24 +180,22 @@ export class ScoreReader {
           }
         }
       }
-    }, { passive: false });
+    };
 
-    document.addEventListener('touchend', async (e) => {
+    const onPointerUp = (e) => {
       if (appState.get('currentView') !== 'reader') return;
-      if (appState.get('isPenActive')) return;
-
-      const remainingTouches = e.touches.length;
-      console.log(`[Lyra-Touch] touchend: remaining=${remainingTouches}`);
+      activePointers.delete(e.pointerId);
+      const remainingCount = activePointers.size;
 
       gestureDiagnostics.update({
-        touchCount: remainingTouches,
-        state: remainingTouches > 0 ? '抬起一指' : '已松手'
-      }, e.touches);
+        touchCount: remainingCount,
+        state: remainingCount > 0 ? '剩余触控点' : '手指抬起'
+      }, Array.from(activePointers.values()).map(p => ({ clientX: p.x, clientY: p.y })));
 
-      if (isMultiTouch) {
-        if (remainingTouches < 2) {
-          isMultiTouch = false;
-          initialDistance = 0;
+      if (isPinching) {
+        if (remainingCount < 2) {
+          isPinching = false;
+          initialPinchDistance = 0;
           if (this.onZoomChange) {
             this.onZoomChange(this.zoomScale);
           }
@@ -210,10 +203,10 @@ export class ScoreReader {
         return;
       }
 
-      if (isSwiping && remainingTouches === 0) {
+      if (isSwiping && remainingCount === 0 && !appState.get('isPenActive')) {
         isSwiping = false;
-        const deltaX = currentX - startX;
-        const deltaY = currentY - startY;
+        const deltaX = swipeCurrentX - swipeStartX;
+        const deltaY = swipeCurrentY - swipeStartY;
         const threshold = 45;
 
         this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
@@ -259,10 +252,16 @@ export class ScoreReader {
           }
         }
 
-        // 未达到翻页阈值 -> 弹性回弹复位
+        // 未达阈值回弹
         this.container.style.transform = `scale(${this.zoomScale}) translate(0, 0)`;
       }
-    }, { passive: true });
+    };
+
+    // 全局捕获阶段 (Capture Phase) 监听 Pointer Events
+    window.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
+    window.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
+    window.addEventListener('pointerup', onPointerUp, { capture: true, passive: true });
+    window.addEventListener('pointercancel', onPointerUp, { capture: true, passive: true });
   }
 
   setZoom(scale) {
