@@ -1,6 +1,6 @@
 /**
  * MusicXML 乐谱矢量渲染引擎 (基于 OpenSheetMusicDisplay - OSMD)
- * 健壮容错版：支持纯文本/二进制/离线预解析与动态 DOM 容器渲染
+ * 深度适配 MusicXML 纯文本 (.xml / .musicxml) 与 Zip 压缩二进制 (.mxl) 格式
  */
 
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
@@ -10,7 +10,7 @@ export class XmlScoreRenderer {
     this.osmd = null;
     this.container = null;
     this.isLoaded = false;
-    this.xmlString = '';
+    this.rawContent = null;
   }
 
   /**
@@ -35,68 +35,98 @@ export class XmlScoreRenderer {
   }
 
   /**
-   * 加载 XML / MusicXML 内容
-   * @param {string|ArrayBuffer|Blob} xmlInput 
+   * 判断数据是否为 Zip/MXL 压缩格式 (Magic Bytes: 0x50, 0x4B)
+   */
+  isZipData(data) {
+    if (!data) return false;
+    if (data instanceof ArrayBuffer) {
+      const u8 = new Uint8Array(data);
+      return u8.length >= 2 && u8[0] === 0x50 && u8[1] === 0x4B;
+    }
+    if (data instanceof Uint8Array) {
+      return data.length >= 2 && data[0] === 0x50 && data[1] === 0x4B;
+    }
+    if (typeof data === 'string') {
+      return data.startsWith('PK');
+    }
+    return false;
+  }
+
+  /**
+   * 加载 XML / MusicXML / MXL 内容
+   * @param {string|ArrayBuffer|Uint8Array|Blob} xmlInput 
    * @param {HTMLElement} [containerElement] 可选容器
    */
   async load(xmlInput, containerElement) {
-    let xmlText = '';
+    let loadPayload = xmlInput;
 
-    if (typeof xmlInput === 'string') {
-      xmlText = xmlInput;
-    } else if (xmlInput instanceof Blob) {
-      xmlText = await xmlInput.text();
-    } else if (xmlInput instanceof ArrayBuffer) {
-      const decoder = new TextDecoder('utf-8');
-      xmlText = decoder.decode(xmlInput);
+    if (xmlInput instanceof Blob) {
+      loadPayload = await xmlInput.arrayBuffer();
     }
 
-    this.xmlString = xmlText;
+    // 区分处理：Zip/MXL 保持二进制，非 Zip 转为文本字符串
+    let xmlText = '';
+    const isMxl = this.isZipData(loadPayload);
 
-    // 如果传入了容器或者已经有容器，进行 OSMD 实装渲染
+    if (!isMxl) {
+      if (typeof loadPayload === 'string') {
+        xmlText = loadPayload;
+      } else if (loadPayload instanceof ArrayBuffer || loadPayload instanceof Uint8Array) {
+        try {
+          xmlText = new TextDecoder('utf-8').decode(loadPayload);
+          loadPayload = xmlText;
+        } catch (_) {}
+      }
+    }
+
+    this.rawContent = loadPayload;
+
+    // 挂载到容器并渲染
     if (containerElement) {
       this.init(containerElement);
     }
 
     if (!this.osmd && !this.container) {
-      // 离线预解析阶段：创建一个虚拟容器预载以获取元数据
+      // 离线预解析阶段：建立临时离线节点加载元数据
       const tempDiv = document.createElement('div');
       tempDiv.style.display = 'none';
       document.body.appendChild(tempDiv);
       this.init(tempDiv);
 
       try {
-        await this.osmd.load(this.xmlString);
+        await this.osmd.load(loadPayload);
         this.isLoaded = true;
       } catch (err) {
-        console.warn('离线预加载 OSMD 失败，回退到 DOMParser 解析:', err);
+        console.warn('离线预加载 OSMD 失败:', err);
       } finally {
         if (tempDiv.parentNode) {
           tempDiv.parentNode.removeChild(tempDiv);
         }
       }
     } else if (this.osmd) {
-      await this.osmd.load(this.xmlString);
+      await this.osmd.load(loadPayload);
       this.isLoaded = true;
       this.osmd.render();
     }
 
-    // 提取标题与作曲家
-    let title = 'MusicXML 乐谱';
-    let composer = '未知作曲家';
+    // 提取乐谱元数据 (从 OSMD sheet 获取或 DOMParser 回退)
+    let title = this.osmd?.sheet?.title?.text || 'MusicXML 乐谱';
+    let composer = this.osmd?.sheet?.composer?.text || '未知作曲家';
 
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(this.xmlString, 'text/xml');
-      const titleNode = doc.querySelector('work-title') || doc.querySelector('movement-title');
-      if (titleNode && titleNode.textContent.trim()) {
-        title = titleNode.textContent.trim();
-      }
-      const composerNode = doc.querySelector('creator[type="composer"]') || doc.querySelector('creator');
-      if (composerNode && composerNode.textContent.trim()) {
-        composer = composerNode.textContent.trim();
-      }
-    } catch (_) {}
+    if ((!title || title === 'MusicXML 乐谱') && xmlText) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, 'text/xml');
+        const titleNode = doc.querySelector('work-title') || doc.querySelector('movement-title');
+        if (titleNode?.textContent?.trim()) {
+          title = titleNode.textContent.trim();
+        }
+        const composerNode = doc.querySelector('creator[type="composer"]') || doc.querySelector('creator');
+        if (composerNode?.textContent?.trim()) {
+          composer = composerNode.textContent.trim();
+        }
+      } catch (_) {}
+    }
 
     return {
       title,

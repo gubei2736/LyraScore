@@ -2,11 +2,13 @@
  * 乐谱库与分类中心 (ScoreLibrary Component)
  * 包含现代乐谱网格、可折叠侧边栏、调式分类、纯净标签分类、搜索与文件导入
  * 按钮全量汉字化：开始阅读 / 副本 / 编辑 / 删除
+ * 完美支持 PDF / MusicXML (.xml) / 压缩包 (.mxl) / 图片
  */
 
 import { scoreDB } from '../core/db.js';
 import { KEY_SIGNATURES } from '../core/state.js';
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
+import { XmlScoreRenderer } from '../renderers/xmlRenderer.js';
 
 export class ScoreLibrary {
   constructor(containerElement, options = {}) {
@@ -450,12 +452,13 @@ export class ScoreLibrary {
         }
       } else if (['xml', 'musicxml', 'mxl'].includes(ext)) {
         format = 'xml';
-        const text = await file.text();
-        fileData = text;
+        // 关键：以 ArrayBuffer 二进制读取，完整保留 Zip/MXL 与纯文本 XML 结构
+        const arrayBuf = await file.arrayBuffer();
+        fileData = arrayBuf;
 
         try {
           const xmlR = new XmlScoreRenderer();
-          const info = await xmlR.load(text);
+          const info = await xmlR.load(arrayBuf);
           title = info.title || title;
           composer = info.composer || composer;
           xmlR.destroy();
