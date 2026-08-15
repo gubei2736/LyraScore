@@ -9,7 +9,6 @@ import { ImageScoreRenderer } from '../renderers/imgRenderer.js';
 import { StrokeRenderer } from './penEngine/strokeRenderer.js';
 import { scoreDB } from './db.js';
 import { appState } from './state.js';
-import { gestureDiagnostics } from './gestureDiagnostics.js';
 
 export class ScoreReader {
   constructor(viewportContainerElement) {
@@ -74,15 +73,6 @@ export class ScoreReader {
         initialPinchDistance = getDistance(pts[0], pts[1]);
         initialPinchScale = this.zoomScale;
         this.container.style.transition = 'none';
-
-        gestureDiagnostics.update({
-          touchCount: count,
-          initialDist: initialPinchDistance,
-          currentDist: initialPinchDistance,
-          scale: this.zoomScale,
-          state: '双指缩放就绪',
-          target: e.target?.className || e.target?.tagName
-        }, pts.map(p => ({ clientX: p.x, clientY: p.y })));
         return;
       }
 
@@ -94,15 +84,6 @@ export class ScoreReader {
         swipeCurrentX = swipeStartX;
         swipeCurrentY = swipeStartY;
         this.container.style.transition = 'none';
-
-        gestureDiagnostics.update({
-          touchCount: 1,
-          initialDist: 0,
-          currentDist: 0,
-          scale: this.zoomScale,
-          state: '单指触碰',
-          target: e.target?.className || e.target?.tagName
-        }, [{ clientX: e.clientX, clientY: e.clientY }]);
       }
     };
 
@@ -139,15 +120,6 @@ export class ScoreReader {
           if (this.onZoomChange) {
             this.onZoomChange(this.zoomScale);
           }
-
-          gestureDiagnostics.update({
-            touchCount: count,
-            initialDist: initialPinchDistance,
-            currentDist: currentDist,
-            scale: targetScale,
-            state: '双指缩放中',
-            target: e.target?.className || e.target?.tagName
-          }, pts.map(p => ({ clientX: p.x, clientY: p.y })));
         }
         return;
       }
@@ -158,15 +130,6 @@ export class ScoreReader {
         swipeCurrentY = e.clientY;
         const deltaX = swipeCurrentX - swipeStartX;
         const deltaY = swipeCurrentY - swipeStartY;
-
-        gestureDiagnostics.update({
-          touchCount: 1,
-          initialDist: 0,
-          currentDist: Math.round(Math.hypot(deltaX, deltaY)),
-          scale: this.zoomScale,
-          state: `单指滑动 (dx:${Math.round(deltaX)}, dy:${Math.round(deltaY)})`,
-          target: e.target?.className || e.target?.tagName
-        }, [{ clientX: e.clientX, clientY: e.clientY }]);
 
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
           if (Math.abs(deltaX) > 12) {
@@ -186,11 +149,6 @@ export class ScoreReader {
       if (appState.get('currentView') !== 'reader') return;
       activePointers.delete(e.pointerId);
       const remainingCount = activePointers.size;
-
-      gestureDiagnostics.update({
-        touchCount: remainingCount,
-        state: remainingCount > 0 ? '剩余触控点' : '手指抬起'
-      }, Array.from(activePointers.values()).map(p => ({ clientX: p.x, clientY: p.y })));
 
       if (isPinching) {
         if (remainingCount < 2) {
