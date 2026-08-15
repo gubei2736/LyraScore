@@ -1,17 +1,9 @@
 /**
  * PDF 乐谱渲染引擎 (基于 Mozilla PDF.js)
- * 支持多页高清渲染、平板视网膜 DPR 自适应缩放
+ * 支持多页高清渲染、平板视网膜 DPR 自适应缩放，完全离线运行
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
-
-// 配置 PDF.js Worker 路径
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-  ).toString();
-}
 
 export class PdfScoreRenderer {
   constructor() {
@@ -24,18 +16,33 @@ export class PdfScoreRenderer {
     let data = fileData;
     if (fileData instanceof Blob) {
       data = await fileData.arrayBuffer();
+    } else if (typeof fileData === 'string' && fileData.startsWith('data:')) {
+      // DataURL 转 Uint8Array
+      const base64 = fileData.split(',')[1];
+      const binaryStr = atob(base64);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      data = bytes.buffer;
     }
 
-    const loadingTask = pdfjsLib.getDocument({
-      data: data,
-      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
-      cMapPacked: true
-    });
+    try {
+      const loadingTask = pdfjsLib.getDocument({
+        data: data,
+        verbosity: 0,
+        stopAtErrors: false
+      });
 
-    this.pdfDoc = await loadingTask.promise;
-    return {
-      numPages: this.pdfDoc.numPages
-    };
+      this.pdfDoc = await loadingTask.promise;
+      return {
+        numPages: this.pdfDoc.numPages
+      };
+    } catch (err) {
+      console.error('PDF 解析失败:', err);
+      throw new Error('PDF 乐谱文件解析失败，请检查文件是否损坏');
+    }
   }
 
   getNumPages() {
@@ -56,7 +63,7 @@ export class PdfScoreRenderer {
 
     // 计算缩放比例适应容器宽度
     const baseScale = containerWidth / unscaledViewport.width;
-    const dpr = window.devicePixelRatio || 2.0;
+    const dpr = Math.min(window.devicePixelRatio || 2.0, 2.5); // 限制最大 2.5 倍以保障大图性能
     const renderScale = baseScale * dpr;
 
     const viewport = page.getViewport({ scale: renderScale });
@@ -95,7 +102,11 @@ export class PdfScoreRenderer {
 
   destroy() {
     if (this.pdfDoc) {
-      this.pdfDoc.destroy();
+      try {
+        this.pdfDoc.destroy();
+      } catch (e) {
+        // ignore
+      }
       this.pdfDoc = null;
     }
     this.pageCache.clear();

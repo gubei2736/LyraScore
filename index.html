@@ -4,15 +4,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#fbf8f1">
-  <meta name="description" content="LyraScore - 专为安卓平板量身定制的轻量乐谱阅读与手写批注创作工作站">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>LyraScore 天琴乐谱 - 平板阅读与手写创作</title>
-  
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎼</text></svg>">
+  <meta name="description" content="LyraScore - 专为平板量身定制的智能乐谱阅读与手写创作工作站">
+  <title>LyraScore 天琴乐谱</title>
   
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #fbf8f1;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    #app {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
     .view-layer {
       position: absolute;
       top: 0; left: 0;
