@@ -866,23 +866,90 @@
   min-height: 800px;
 }
 
-/* ================= 竖屏平板响应式优化 ================= */
-@media (max-width: 900px) {
+/* ================= 竖屏平板响应式深度排版优化 ================= */
+@media (orientation: portrait), (max-width: 960px) {
   .reader-topbar {
-    padding: 0 8px;
-    gap: 4px;
+    padding: 0 10px;
+    gap: 6px;
+    height: 50px;
   }
+
+  /* 竖屏下彻底隐藏滑动条，仅保留 100% 标签 (依然支持点击一键复位) */
+  .zoom-range-slider {
+    display: none !important;
+  }
+  .zoom-slider-box {
+    padding: 3px 6px;
+    background: transparent;
+    border-color: transparent;
+  }
+  .zoom-pct-display {
+    min-width: 32px;
+    font-size: 11px;
+    padding: 2px 4px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+  }
+
+  /* 竖屏下单/双页不可用，直接隐藏切换控件 */
+  .layout-toggle-group {
+    display: none !important;
+  }
+
+  /* 紧凑标题与按钮 */
   .viewer-score-title {
-    max-width: 110px;
+    max-width: 130px;
     font-size: 13px;
+  }
+  .topbar-left {
+    gap: 6px;
+  }
+  .topbar-back-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  .back-text {
+    display: inline-block;
+  }
+
+  /* 中间胶囊紧凑流式排列 */
+  .topbar-center {
+    gap: 6px;
+  }
+  .topbar-flip-stepper {
+    display: none !important;
+  }
+  .topbar-flip-widget {
+    padding: 2px 4px;
+  }
+  .topbar-metronome-widget {
+    padding: 2px 4px;
+  }
+
+  /* 右侧按键紧凑布局 */
+  .topbar-right {
+    gap: 5px;
+  }
+  #themeCycleBtn {
+    padding: 4px 7px;
+    font-size: 12px;
+  }
+  #stageModeBtn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 700px) {
+  .viewer-score-title {
+    max-width: 90px;
+    font-size: 12px;
   }
   .back-text {
     display: none;
   }
-  .zoom-range-slider {
-    width: 50px;
-  }
-  .topbar-flip-stepper {
-    display: none;
+  #stageModeBtn {
+    padding: 4px 6px;
   }
 }
