@@ -1,6 +1,6 @@
 /**
  * MusicXML 乐谱矢量渲染引擎 (基于 OpenSheetMusicDisplay - OSMD)
- * 支持 MusicXML / XML 格式的矢量五线谱排版与动态视口缩放
+ * 健壮容错版：支持纯文本/二进制/离线预解析与动态 DOM 容器渲染
  */
 
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
@@ -34,28 +34,74 @@ export class XmlScoreRenderer {
     });
   }
 
-  async load(xmlContent, containerElement) {
+  /**
+   * 加载 XML / MusicXML 内容
+   * @param {string|ArrayBuffer|Blob} xmlInput 
+   * @param {HTMLElement} [containerElement] 可选容器
+   */
+  async load(xmlInput, containerElement) {
+    let xmlText = '';
+
+    if (typeof xmlInput === 'string') {
+      xmlText = xmlInput;
+    } else if (xmlInput instanceof Blob) {
+      xmlText = await xmlInput.text();
+    } else if (xmlInput instanceof ArrayBuffer) {
+      const decoder = new TextDecoder('utf-8');
+      xmlText = decoder.decode(xmlInput);
+    }
+
+    this.xmlString = xmlText;
+
+    // 如果传入了容器或者已经有容器，进行 OSMD 实装渲染
     if (containerElement) {
       this.init(containerElement);
     }
-    if (!this.osmd && this.container) {
-      this.init(this.container);
+
+    if (!this.osmd && !this.container) {
+      // 离线预解析阶段：创建一个虚拟容器预载以获取元数据
+      const tempDiv = document.createElement('div');
+      tempDiv.style.display = 'none';
+      document.body.appendChild(tempDiv);
+      this.init(tempDiv);
+
+      try {
+        await this.osmd.load(this.xmlString);
+        this.isLoaded = true;
+      } catch (err) {
+        console.warn('离线预加载 OSMD 失败，回退到 DOMParser 解析:', err);
+      } finally {
+        if (tempDiv.parentNode) {
+          tempDiv.parentNode.removeChild(tempDiv);
+        }
+      }
+    } else if (this.osmd) {
+      await this.osmd.load(this.xmlString);
+      this.isLoaded = true;
+      this.osmd.render();
     }
 
-    this.xmlString = xmlContent;
-    await this.osmd.load(xmlContent);
-    this.isLoaded = true;
+    // 提取标题与作曲家
+    let title = 'MusicXML 乐谱';
+    let composer = '未知作曲家';
 
-    // 初次渲染
-    this.osmd.render();
-
-    const title = this.osmd.sheet?.title?.text || '未命名 MusicXML 乐谱';
-    const composer = this.osmd.sheet?.composer?.text || '未知作曲家';
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(this.xmlString, 'text/xml');
+      const titleNode = doc.querySelector('work-title') || doc.querySelector('movement-title');
+      if (titleNode && titleNode.textContent.trim()) {
+        title = titleNode.textContent.trim();
+      }
+      const composerNode = doc.querySelector('creator[type="composer"]') || doc.querySelector('creator');
+      if (composerNode && composerNode.textContent.trim()) {
+        composer = composerNode.textContent.trim();
+      }
+    } catch (_) {}
 
     return {
       title,
       composer,
-      numPages: 1 // OSMD 默认按整谱或页面排版
+      numPages: 1
     };
   }
 
@@ -72,9 +118,6 @@ export class XmlScoreRenderer {
     }
   }
 
-  /**
-   * 生成缩略图
-   */
   async generateThumbnail() {
     if (!this.container) return null;
     const svgEl = this.container.querySelector('svg');

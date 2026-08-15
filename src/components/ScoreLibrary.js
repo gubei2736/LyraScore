@@ -1,6 +1,7 @@
 /**
  * 乐谱库与分类中心 (ScoreLibrary Component)
  * 包含现代乐谱网格、可折叠侧边栏、调式分类、纯净标签分类、搜索与文件导入
+ * 按钮全量汉字化：开始阅读 / 副本 / 编辑 / 删除
  */
 
 import { scoreDB } from '../core/db.js';
@@ -364,20 +365,19 @@ export class ScoreLibrary {
               `).join('')}
             </div>
 
+            <!-- 卡片操作按钮：纯汉字 开始阅读 / 副本 / 编辑 / 删除 -->
             <div class="card-actions">
-              <!-- 去除图标，纯汉字开始阅读 -->
               <button class="btn btn-sm btn-primary action-open-btn" data-action="open">
                 开始阅读
               </button>
-              <!-- 去除图标，纯汉字副本 -->
               <button class="btn btn-sm btn-outline" data-action="copy" title="创建独立练习/手写笔记副本">
                 副本
               </button>
-              <button class="btn-icon-more" data-action="edit" title="编辑元数据">
-                ✏️
+              <button class="btn btn-sm btn-ghost action-edit-btn" data-action="edit" title="编辑乐谱信息">
+                编辑
               </button>
-              <button class="btn-icon-more btn-delete" data-action="delete" title="删除乐谱">
-                🗑️
+              <button class="btn btn-sm btn-ghost action-delete-btn" data-action="delete" title="删除乐谱">
+                删除
               </button>
             </div>
           </div>
@@ -453,10 +453,15 @@ export class ScoreLibrary {
         const text = await file.text();
         fileData = text;
 
-        const titleMatch = text.match(/<work-title>([^<]+)<\/work-title>/i) || text.match(/<movement-title>([^<]+)<\/movement-title>/i);
-        if (titleMatch) title = titleMatch[1];
-        const composerMatch = text.match(/<creator type="composer">([^<]+)<\/creator>/i);
-        if (composerMatch) composer = composerMatch[1];
+        try {
+          const xmlR = new XmlScoreRenderer();
+          const info = await xmlR.load(text);
+          title = info.title || title;
+          composer = info.composer || composer;
+          xmlR.destroy();
+        } catch (err) {
+          console.warn('解析 MusicXML 封面/元数据失败:', err);
+        }
       } else if (file.type.startsWith('image/')) {
         format = 'image';
         const reader = new FileReader();
