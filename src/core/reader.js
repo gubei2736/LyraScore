@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备智能空闲预渲染 (0ms 翻页)、动态 GPU 合成纹理加速、双通道多点触控与超低功耗待机
+ * 具备智能空闲预渲染 (0ms 翻页)、动态 GPU 合成纹理加速、双通道多点触控与超丝滑横竖屏无缝切换
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -17,6 +17,7 @@ export class ScoreReader {
     this.currentScore = null;
     this.renderer = null;
     this.strokeRenderers = new Map();
+    this.strokesMemoryCache = new Map(); // 内存热缓存笔迹，加速横竖屏切换
 
     this.currentPage = 0; // 0-based
     this.totalPages = 1;
@@ -29,23 +30,41 @@ export class ScoreReader {
     this.gpuReleaseTimer = null;
     this.idlePrerenderHandle = null;
 
-    this.initWindowResizeListener();
+    this.initSmoothOrientationListener();
     this.initDualChannelGestures();
   }
 
-  initWindowResizeListener() {
+  /**
+   * 极速丝滑横竖屏旋转监听器 (0ms 即时几何过渡 + 60ms 无缝交叉淡入)
+   */
+  initSmoothOrientationListener() {
     let resizeTimer = null;
-    window.addEventListener('resize', () => {
-      if (this.currentScore && !this.isRendering) {
-        clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => {
-          const currentWidth = this.viewportEl?.clientWidth || window.innerWidth;
-          if (Math.abs(currentWidth - this.lastRenderedWidth) > 20) {
-            this.renderCurrentLayout();
-          }
-        }, 300);
+
+    const handleOrientationOrResize = () => {
+      if (!this.currentScore || this.isRendering) return;
+
+      const currentWidth = this.viewportEl?.clientWidth || window.innerWidth;
+      if (Math.abs(currentWidth - this.lastRenderedWidth) < 20) return;
+
+      // 1. 瞬时几何平滑过渡：利用 CSS transform 在 0ms 瞬间顺滑贴合新宽度，消除呆滞空白
+      if (this.lastRenderedWidth > 0 && currentWidth > 0) {
+        const ratio = currentWidth / this.lastRenderedWidth;
+        this.container.style.transition = 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
+        this.container.style.transform = `scale(${this.zoomScale * ratio})`;
+        this.container.style.transformOrigin = 'top center';
       }
-    });
+
+      // 2. 60ms 极速防抖，在后台无感完成高清重绘
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        this.renderCurrentLayout(true); // smoothTransition = true
+      }, 60);
+    };
+
+    window.addEventListener('resize', handleOrientationOrResize, { passive: true });
+    if (window.screen && window.screen.orientation) {
+      window.screen.orientation.addEventListener('change', handleOrientationOrResize);
+    }
   }
 
   enableGpuLayer() {
@@ -86,7 +105,7 @@ export class ScoreReader {
       if (count >= 2) {
         isPinching = true;
         isSwiping = false;
-        this.enableGpuLayer(); // 动态激活 GPU 硬件合成层
+        this.enableGpuLayer();
         const pts = Array.from(activePointers.values());
         initialPinchDistance = getDistance(pts[0], pts[1]);
         initialPinchScale = this.zoomScale;
@@ -177,7 +196,7 @@ export class ScoreReader {
         if (remainingCount < 2) {
           isPinching = false;
           initialPinchDistance = 0;
-          this.scheduleGpuLayerRelease(200); // 手势结束，释放 GPU 常驻层
+          this.scheduleGpuLayerRelease(200);
           if (this.onZoomChange) {
             this.onZoomChange(this.zoomScale);
           }
@@ -263,6 +282,7 @@ export class ScoreReader {
     this.currentScore = score;
     this.currentPage = initialPage;
     this.clearStrokes();
+    this.strokesMemoryCache.clear();
 
     score.lastReadTime = Date.now();
     scoreDB.saveScore(score);
@@ -291,25 +311,32 @@ export class ScoreReader {
       totalPages: this.totalPages
     });
 
-    await this.renderCurrentLayout();
+    await this.renderCurrentLayout(false);
   }
 
-  async renderCurrentLayout() {
+  /**
+   * 核心布局渲染 (支持无缝平滑交叉淡入 smoothTransition)
+   */
+  async renderCurrentLayout(smoothTransition = false) {
     if (!this.currentScore || !this.renderer || this.isRendering) return;
     this.isRendering = true;
 
-    try {
-      this.clearStrokes();
-      this.container.innerHTML = '';
-      this.container.style.transition = 'none';
-      this.container.style.transform = `scale(${this.zoomScale})`;
-      this.container.style.transformOrigin = 'top center';
+    // 缓存当前正在编辑的笔迹到内存
+    for (const [pageIdx, sr] of this.strokeRenderers.entries()) {
+      if (sr.strokes && sr.strokes.length > 0) {
+        this.strokesMemoryCache.set(pageIdx, [...sr.strokes]);
+      }
+    }
 
+    try {
       const vpWidth = this.viewportEl?.clientWidth || window.innerWidth;
       const containerWidth = Math.max(vpWidth - 32, 600);
       this.lastRenderedWidth = vpWidth;
-
       const mode = this.layoutMode;
+
+      // 创建离屏临时容器，构建新排版
+      const newStage = document.createElement('div');
+      newStage.className = 'score-stage-content';
 
       if (this.currentScore.format === 'xml') {
         const pageWrapper = document.createElement('div');
@@ -321,8 +348,9 @@ export class ScoreReader {
         const penCanvas = document.createElement('canvas');
         penCanvas.className = 'pen-overlay-canvas';
         pageWrapper.appendChild(penCanvas);
-        this.container.appendChild(pageWrapper);
+        newStage.appendChild(pageWrapper);
 
+        this.applyNewStage(newStage, smoothTransition);
         await this.renderer.load(this.currentScore.fileBlob || this.currentScore.fileData, xmlContainer);
 
         setTimeout(async () => {
@@ -335,15 +363,16 @@ export class ScoreReader {
             scoreId: this.currentScore.id,
             pageIndex: 0,
             onChange: (strokes) => {
+              this.strokesMemoryCache.set(0, strokes);
               scoreDB.savePageAnnotations(this.currentScore.id, 0, strokes);
             }
           });
 
-          const savedStrokes = await scoreDB.getPageAnnotations(this.currentScore.id, 0);
-          strokeRenderer.loadStrokes(savedStrokes);
+          const cachedStrokes = this.strokesMemoryCache.get(0) || await scoreDB.getPageAnnotations(this.currentScore.id, 0);
+          strokeRenderer.loadStrokes(cachedStrokes);
           this.strokeRenderers.set(0, strokeRenderer);
           this.syncPenToolToRenderers();
-        }, 100);
+        }, 80);
         return;
       }
 
@@ -354,7 +383,6 @@ export class ScoreReader {
 
         const leftPageIndex = this.currentPage % 2 === 0 ? this.currentPage : this.currentPage - 1;
         const rightPageIndex = leftPageIndex + 1;
-
         const pageWidth = Math.floor((containerWidth - 32) / 2);
 
         const leftPageEl = await this.createPageElement(leftPageIndex, pageWidth);
@@ -365,7 +393,7 @@ export class ScoreReader {
           if (rightPageEl) doubleContainer.appendChild(rightPageEl);
         }
 
-        this.container.appendChild(doubleContainer);
+        newStage.appendChild(doubleContainer);
       } else {
         // 单页模式
         const singleContainer = document.createElement('div');
@@ -374,15 +402,46 @@ export class ScoreReader {
         const pageWidth = Math.min(containerWidth, 980);
         const pageEl = await this.createPageElement(this.currentPage, pageWidth);
         if (pageEl) singleContainer.appendChild(pageEl);
-        this.container.appendChild(singleContainer);
+        newStage.appendChild(singleContainer);
       }
 
+      // 将构建好的新舞台无缝交叉淡入替换到主容器
+      this.applyNewStage(newStage, smoothTransition);
       this.syncPenToolToRenderers();
 
       // 在当前页光栅化完毕后，利用系统空闲时间触发相邻页离屏预加载
       this.scheduleIdlePrerender(containerWidth);
     } finally {
       this.isRendering = false;
+    }
+  }
+
+  /**
+   * 无缝平滑替换舞台内容 (Cross-Fade 交叉淡入淡出，彻底消除白屏闪烁)
+   */
+  applyNewStage(newStageElement, smoothTransition) {
+    this.clearStrokes();
+
+    if (smoothTransition) {
+      newStageElement.style.opacity = '0';
+      newStageElement.style.transition = 'opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1)';
+
+      this.container.innerHTML = '';
+      this.container.appendChild(newStageElement);
+
+      this.container.style.transition = 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1)';
+      this.container.style.transform = `scale(${this.zoomScale})`;
+      this.container.style.transformOrigin = 'top center';
+
+      requestAnimationFrame(() => {
+        newStageElement.style.opacity = '1';
+      });
+    } else {
+      this.container.innerHTML = '';
+      this.container.appendChild(newStageElement);
+      this.container.style.transition = 'none';
+      this.container.style.transform = `scale(${this.zoomScale})`;
+      this.container.style.transformOrigin = 'top center';
     }
   }
 
@@ -451,11 +510,13 @@ export class ScoreReader {
         scoreId: this.currentScore.id,
         pageIndex: pageIndex,
         onChange: (strokes) => {
+          this.strokesMemoryCache.set(pageIndex, strokes);
           scoreDB.savePageAnnotations(this.currentScore.id, pageIndex, strokes);
         }
       });
 
-      const savedStrokes = await scoreDB.getPageAnnotations(this.currentScore.id, pageIndex);
+      // 优先从内存热缓存恢复笔迹，极速秒出
+      const savedStrokes = this.strokesMemoryCache.get(pageIndex) || await scoreDB.getPageAnnotations(this.currentScore.id, pageIndex);
       strokeRenderer.loadStrokes(savedStrokes);
 
       this.strokeRenderers.set(pageIndex, strokeRenderer);
@@ -488,7 +549,7 @@ export class ScoreReader {
     if (this.currentPage + step < this.totalPages) {
       this.currentPage += step;
       appState.set({ currentPage: this.currentPage });
-      await this.renderCurrentLayout();
+      await this.renderCurrentLayout(false);
       return true;
     }
     return false;
@@ -499,7 +560,7 @@ export class ScoreReader {
     if (this.currentPage - step >= 0) {
       this.currentPage = Math.max(0, this.currentPage - step);
       appState.set({ currentPage: this.currentPage });
-      await this.renderCurrentLayout();
+      await this.renderCurrentLayout(false);
       return true;
     }
     return false;
@@ -509,7 +570,7 @@ export class ScoreReader {
     if (pageIndex >= 0 && pageIndex < this.totalPages) {
       this.currentPage = pageIndex;
       appState.set({ currentPage: this.currentPage });
-      await this.renderCurrentLayout();
+      await this.renderCurrentLayout(false);
       return true;
     }
     return false;
@@ -519,7 +580,7 @@ export class ScoreReader {
     if (['single', 'double'].includes(mode)) {
       this.layoutMode = mode;
       appState.set({ layoutMode: mode });
-      this.renderCurrentLayout();
+      this.renderCurrentLayout(true);
     }
   }
 
