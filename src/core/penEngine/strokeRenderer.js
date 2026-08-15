@@ -52,6 +52,7 @@ export class StrokeRenderer {
 
   setBrush(config) {
     this.brush = { ...this.brush, ...config };
+    console.log(`[StrokeRenderer] setBrush updated -> tool:${this.brush.tool}, color:${this.brush.color}, size:${this.brush.size}`);
   }
 
   resizeToParent(width, height) {
@@ -222,12 +223,14 @@ export class StrokeRenderer {
 
     const strokeOptions = {
       size: isHighlighter ? this.brush.size * 3.5 : this.brush.size,
-      thinning: isFountain ? 0.3 : 0.0,
+      thinning: isFountain ? 0.35 : 0.0,
       smoothing: 0.5,
       streamline: 0.25,
-      start: { taper: isFountain ? this.brush.size * 1.5 : 0 },
-      end:   { taper: isFountain ? this.brush.size * 2.0 : 0 }
+      start: { taper: isFountain ? 0.15 : 0 },
+      end:   { taper: isFountain ? 0.20 : 0 }
     };
+
+    console.log(`[StrokeRenderer] drawCurrentLive -> tool:${tool}, brushSize:${this.brush.size}, calcSize:${strokeOptions.size}, points:${pointsToRender.length}`);
 
     const outline = getStroke(pointsToRender, strokeOptions);
     const compOp = isHighlighter ? 'multiply' : 'source-over';
@@ -250,11 +253,11 @@ export class StrokeRenderer {
 
         const strokeOptions = {
           size: isHighlighter ? item.size * 3.5 : item.size,
-          thinning: isFountain ? 0.3 : 0.0,
+          thinning: isFountain ? 0.35 : 0.0,
           smoothing: 0.5,
           streamline: 0.25,
-          start: { taper: isFountain ? item.size * 1.5 : 0 },
-          end:   { taper: isFountain ? item.size * 2.0 : 0 }
+          start: { taper: isFountain ? 0.15 : 0 },
+          end:   { taper: isFountain ? 0.20 : 0 }
         };
 
         const outline = getStroke(item.points, strokeOptions);

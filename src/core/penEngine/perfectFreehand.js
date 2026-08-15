@@ -112,20 +112,25 @@ export function getStroke(rawPoints, options = {}) {
     let taperFactor = 1;
 
     if (start.taper) {
-      const taperLen = typeof start.taper === 'number' ? start.taper : 0.15;
-      if (progress < taperLen) {
+      // 若 taper >= 1 则视为点数，转换为比例并限制最大不超过 30%
+      const taperLen = typeof start.taper === 'number' 
+        ? (start.taper >= 1 ? Math.min(0.3, start.taper / Math.max(total, 1)) : start.taper) 
+        : 0.15;
+      if (progress < taperLen && taperLen > 0) {
         taperFactor = easing(progress / taperLen);
       }
     }
     if (end.taper) {
-      const taperLen = typeof end.taper === 'number' ? end.taper : 0.15;
-      if (progress > 1 - taperLen) {
+      const taperLen = typeof end.taper === 'number' 
+        ? (end.taper >= 1 ? Math.min(0.3, end.taper / Math.max(total, 1)) : end.taper) 
+        : 0.15;
+      if (progress > 1 - taperLen && taperLen > 0) {
         taperFactor = easing((1 - progress) / taperLen);
       }
     }
 
     const pressureScale = 1 + (p - 0.5) * thinning * 1.5;
-    const radius = Math.max(0.6, (size / 2) * pressureScale * Math.max(0.1, taperFactor));
+    const radius = Math.max(0.8, (size / 2) * pressureScale * Math.max(0.15, taperFactor));
 
     let tangent;
     if (i === 0) {

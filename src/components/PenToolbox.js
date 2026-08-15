@@ -1,11 +1,13 @@
 /**
  * 手写笔专业浮动工具箱 (PenToolbox)
- * 具备：
- * 1. 极致半透明水晶毛玻璃悬浮胶囊
- * 2. 全屏自由拖拽任意移动位置
- * 3. 屏幕旋转相对比例记忆与自适应视口钳位 (用户拖到哪里，横竖屏旋转后依然保持相对原位，绝不强制归位右下角)
- * 4. 纯汉字操作按钮：撤销 / 回退 / 清空
- * 5. 接入现代高保真确认对话框
+ * 与节拍器面板 (Metronome) 采用完全一致的 Popover 视觉方案与卡片分区架构：
+ * 1. 极致半透明水晶毛玻璃悬浮胶囊 (全屏自由拖拽 + 屏幕旋转比例记忆)
+ * 2. 与节拍器统一风格的 Popover 卡片面板 (精致标题头、卡片分区、小节圆角容器、步进微调器)
+ * 3. 笔刷类型选择卡片 (钢笔、圆珠、荧光、直线、印章、橡皮)
+ * 4. 颜色与粗细卡片 (双层光圈调色盘 + 粗细滑动条与数值步进按钮)
+ * 5. 纯汉字操作卡片 (撤销 / 回退 / 清空)
+ * 6. 支持点击外部与右上角 ✕ 自动关闭，手写功能始终常驻
+ * 7. 完备的调试日志输出 (Logcat: LyraScore-JS)
  */
 
 import { MUSICAL_STAMPS } from '../core/penEngine/stamps.js';
@@ -43,6 +45,8 @@ export class PenToolbox {
     appState.subscribe(() => {
       this.syncActiveState();
     });
+
+    console.log('[PenToolbox] Initialized successfully with Metronome-style architecture.');
   }
 
   initOrientationWatcher() {
@@ -55,7 +59,6 @@ export class PenToolbox {
   }
 
   handleScreenResize() {
-    // 若用户未手动移动过，保持 CSS 默认定位 (不强制改写坐标)
     if (!this.hasUserMoved || this.anchorRatioX === null) {
       if (!this.isExpanded) {
         this.container.style.left = '';
@@ -68,9 +71,8 @@ export class PenToolbox {
       return;
     }
 
-    // 用户曾手动移动：按照相对屏幕比例精准重定位
-    const maxLeft = Math.max(8, window.innerWidth - (this.isExpanded ? 350 : 76));
-    const maxTop = Math.max(56, window.innerHeight - (this.isExpanded ? 240 : 56));
+    const maxLeft = Math.max(8, window.innerWidth - (this.isExpanded ? 330 : 76));
+    const maxTop = Math.max(56, window.innerHeight - (this.isExpanded ? 380 : 56));
 
     let newLeft = this.anchorRatioX * window.innerWidth;
     let newTop = this.anchorRatioY * window.innerHeight;
@@ -95,10 +97,14 @@ export class PenToolbox {
       this.isExpanded = !this.isExpanded;
     }
 
-    const box = this.container.querySelector('.pen-toolbox');
-    if (box) {
-      box.classList.toggle('expanded', this.isExpanded);
-      box.classList.toggle('collapsed', !this.isExpanded);
+    const popover = this.container.querySelector('#penToolboxPopover');
+    const pillBtn = this.container.querySelector('#toolboxToggleBtn');
+
+    if (popover) {
+      popover.classList.toggle('open', this.isExpanded);
+    }
+    if (pillBtn) {
+      pillBtn.classList.toggle('active', this.isExpanded);
     }
 
     if (this.isExpanded) {
@@ -109,20 +115,23 @@ export class PenToolbox {
       }
       this.adjustPositionForExpandedPanel();
     } else {
+      this.isStampPickerOpen = false;
+      this.container.querySelector('#stampPopover')?.classList.remove('open');
       this.restoreUserAnchorPosition();
     }
 
     // 手写批注模式始终保持激活，与面板展开/收起状态完全解耦
     appState.set({ isPenActive: true });
     this.reader.syncPenToolToRenderers();
+    console.log(`[PenToolbox] toggle -> isExpanded:${this.isExpanded}, isPenActive:true, currentTool:${appState.get('activePenTool')}, size:${appState.get('penSize')}`);
   }
 
   adjustPositionForExpandedPanel() {
     requestAnimationFrame(() => {
       const container = this.container;
       const rect = container.getBoundingClientRect();
-      const panelWidth = 340;
-      const panelHeight = 230;
+      const panelWidth = 320;
+      const panelHeight = 360;
 
       let safeLeft = this.userAnchorLeft !== null ? this.userAnchorLeft : rect.left;
       let safeTop = this.userAnchorTop !== null ? this.userAnchorTop : rect.top;
@@ -159,7 +168,6 @@ export class PenToolbox {
       this.container.style.right = 'auto';
       this.container.style.bottom = 'auto';
     } else if (!this.hasUserMoved) {
-      // 未移动过，清空内联样式回归 CSS 规则
       this.container.style.left = '';
       this.container.style.top = '';
       this.container.style.right = '';
@@ -168,82 +176,93 @@ export class PenToolbox {
   }
 
   render() {
-    const activeTool = appState.get('activePenTool');
-    const activeColor = appState.get('penColor');
+    const activeTool = appState.get('activePenTool') || 'fountain';
+    const activeColor = appState.get('penColor') || '#1a56db';
+    const currentSize = appState.get('penSize') || 4;
 
     this.container.innerHTML = `
-      <div class="pen-toolbox ${this.isExpanded ? 'expanded' : 'collapsed'}" id="penToolboxWidget">
-        <!-- 极致半透明可移动手柄胶囊 -->
-        <button class="toolbox-toggle-btn draggable-pill" id="toolboxToggleBtn" title="按住可拖动位置，轻触展开批注">
+      <div class="pen-toolbox-wrapper" id="penToolboxWidget">
+        <!-- 悬浮水晶毛玻璃胶囊 (与节拍器顶部胶囊质感统一，可自由拖拽) -->
+        <button class="toolbox-toggle-btn draggable-pill ${this.isExpanded ? 'active' : ''}" id="toolboxToggleBtn" title="轻触展开批注面板，按住可任意拖动位置">
           <span class="tool-icon">🖊️</span>
           <span class="pill-text">${this.isExpanded ? '收起' : '批注'}</span>
         </button>
 
-        <div class="toolbox-content">
-          <div class="toolbox-header-row">
-            <span class="toolbox-title">✍️ 乐谱手写批注</span>
-            <button class="toolbox-minimize-btn" id="toolboxMinimizeBtn" title="最小化到边缘">✕</button>
+        <!-- 与节拍器面板一脉相承的水晶毛玻璃 Popover 面板 -->
+        <div class="pen-metro-popover ${this.isExpanded ? 'open' : ''}" id="penToolboxPopover">
+          <div class="pen-popover-header">
+            <span class="popover-title">✍️ 乐谱手写批注</span>
+            <button class="stamp-close-btn" id="toolboxCloseBtn" title="关闭批注面板">✕</button>
           </div>
 
-          <!-- 笔刷工具选择区 -->
-          <div class="tool-group">
-            <button class="tool-btn ${activeTool === 'fountain' ? 'active' : ''}" data-tool="fountain" title="压感墨水笔 (带笔锋)">
-              <span class="tool-icon">✒️</span>
-              <span class="tool-label">钢笔</span>
-            </button>
-            <button class="tool-btn ${activeTool === 'ballpoint' ? 'active' : ''}" data-tool="ballpoint" title="平滑圆珠笔 (等宽)">
-              <span class="tool-icon">✏️</span>
-              <span class="tool-label">圆珠</span>
-            </button>
-            <button class="tool-btn ${activeTool === 'highlighter' ? 'active' : ''}" data-tool="highlighter" title="荧光高亮记号笔 (半透明)">
-              <span class="tool-icon">🖍️</span>
-              <span class="tool-label">荧光</span>
-            </button>
-            <button class="tool-btn ${activeTool === 'line' ? 'active' : ''}" data-tool="line" title="小节线 / 直线标尺">
-              <span class="tool-icon">📏</span>
-              <span class="tool-label">直线</span>
-            </button>
-            <button class="tool-btn ${activeTool === 'stamp' ? 'active' : ''}" id="stampPickerToggleBtn" data-tool="stamp" title="音乐记号与指法印章">
-              <span class="tool-icon">♯</span>
-              <span class="tool-label">印章</span>
-            </button>
-            <button class="tool-btn ${activeTool === 'eraser' ? 'active' : ''}" data-tool="eraser" title="橡皮擦">
-              <span class="tool-icon">🧹</span>
-              <span class="tool-label">橡皮</span>
-            </button>
+          <!-- 1. 笔刷类型选择卡片 (与节拍器重拍自定义卡片分区一致) -->
+          <div class="pen-section-card">
+            <div class="section-card-header">
+              <span class="section-title">笔刷类型</span>
+            </div>
+            <div class="tool-group-grid">
+              <button class="tool-btn ${activeTool === 'fountain' ? 'active' : ''}" data-tool="fountain" title="压感墨水笔 (带笔锋)">
+                <span class="tool-icon">✒️</span>
+                <span class="tool-label">钢笔</span>
+              </button>
+              <button class="tool-btn ${activeTool === 'ballpoint' ? 'active' : ''}" data-tool="ballpoint" title="平滑圆珠笔 (等宽)">
+                <span class="tool-icon">✏️</span>
+                <span class="tool-label">圆珠</span>
+              </button>
+              <button class="tool-btn ${activeTool === 'highlighter' ? 'active' : ''}" data-tool="highlighter" title="荧光高亮笔 (半透明)">
+                <span class="tool-icon">🖍️</span>
+                <span class="tool-label">荧光</span>
+              </button>
+              <button class="tool-btn ${activeTool === 'line' ? 'active' : ''}" data-tool="line" title="小节线 / 直线标尺">
+                <span class="tool-icon">📏</span>
+                <span class="tool-label">直线</span>
+              </button>
+              <button class="tool-btn ${activeTool === 'stamp' ? 'active' : ''}" id="stampPickerToggleBtn" data-tool="stamp" title="音乐记号与指法印章">
+                <span class="tool-icon">♯</span>
+                <span class="tool-label">印章</span>
+              </button>
+              <button class="tool-btn ${activeTool === 'eraser' ? 'active' : ''}" data-tool="eraser" title="橡皮擦">
+                <span class="tool-icon">🧹</span>
+                <span class="tool-label">橡皮</span>
+              </button>
+            </div>
           </div>
 
-          <div class="tool-divider"></div>
+          <!-- 2. 调色盘与粗细控制卡片 (与节拍器 BPM 仪表核心调节区结构一致) -->
+          <div class="pen-section-card">
+            <div class="section-card-header">
+              <span class="section-title">颜色选择</span>
+            </div>
+            <div class="color-palette-row">
+              ${this.colors.map(c => `
+                <button class="color-dot ${activeColor === c ? 'active' : ''}" data-color="${c}" style="background-color: ${c};" title="选择颜色"></button>
+              `).join('')}
+            </div>
 
-          <!-- 调色盘与粗细控制 -->
-          <div class="color-palette-group">
-            ${this.colors.map(c => `
-              <button class="color-dot ${activeColor === c ? 'active' : ''}" data-color="${c}" style="background-color: ${c};" title="选择颜色"></button>
-            `).join('')}
+            <div class="section-card-divider"></div>
+
+            <div class="section-card-header" style="margin-top: 4px;">
+              <span class="section-title">粗细调节</span>
+              <div class="size-stepper-box">
+                <button class="stepper-step-btn" id="penMinusSizeBtn" title="细一些">-</button>
+                <span class="size-badge-text" id="penSizeValueText">${currentSize} px</span>
+                <button class="stepper-step-btn" id="penPlusSizeBtn" title="粗一些">+</button>
+              </div>
+            </div>
+            <div class="pen-slider-row">
+              <input type="range" class="size-slider" id="strokeSizeSlider" min="2" max="20" step="1" value="${currentSize}">
+            </div>
           </div>
 
-          <div class="stroke-size-group">
-            <span class="size-label">粗细</span>
-            <input type="range" class="size-slider" id="strokeSizeSlider" min="2" max="16" step="1" value="${appState.get('penSize') || 4}">
-          </div>
-
-          <div class="tool-divider"></div>
-
-          <!-- 历史撤销、回退与清屏 (纯汉字无图标) -->
-          <div class="history-group">
-            <button class="action-btn" id="undoBtn" title="撤销笔迹">
-              <span>撤销</span>
-            </button>
-            <button class="action-btn" id="redoBtn" title="回退恢复笔迹">
-              <span>回退</span>
-            </button>
-            <button class="action-btn btn-clear-danger" id="clearBtn" title="清空本页全部笔迹">
-              <span>清空</span>
-            </button>
+          <!-- 3. 历史记录与清空操作区 (纯汉字无图标) -->
+          <div class="pen-actions-card">
+            <button class="action-btn" id="undoBtn" title="撤销上一笔">撤销</button>
+            <button class="action-btn" id="redoBtn" title="回退恢复笔迹">回退</button>
+            <button class="action-btn btn-clear-danger" id="clearBtn" title="清空本页全部笔迹">清空</button>
           </div>
         </div>
 
-        <!-- 弹出式音乐印章选择面板 -->
+        <!-- 弹出式音乐印章选择面板 (挂载在 Popover 旁边) -->
         <div class="stamp-popover ${this.isStampPickerOpen ? 'open' : ''}" id="stampPopover">
           <div class="stamp-popover-header">
             <span>常用五线谱记号 &amp; 钢琴指法</span>
@@ -331,14 +350,18 @@ export class PenToolbox {
   }
 
   bindEvents() {
-    this.container.querySelector('#toolboxMinimizeBtn')?.addEventListener('click', () => {
+    // 1. 关闭按钮
+    this.container.querySelector('#toolboxCloseBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.toggle(false);
     });
 
+    // 2. 点击工具与颜色
     this.container.addEventListener('click', (e) => {
       const toolBtn = e.target.closest('.tool-btn');
       if (toolBtn) {
         const tool = toolBtn.dataset.tool;
+        console.log(`[PenToolbox] tool selected: ${tool}`);
         if (tool === 'stamp') {
           this.isStampPickerOpen = !this.isStampPickerOpen;
           this.container.querySelector('#stampPopover')?.classList.toggle('open', this.isStampPickerOpen);
@@ -355,7 +378,9 @@ export class PenToolbox {
 
       const colorBtn = e.target.closest('.color-dot');
       if (colorBtn) {
-        appState.set({ penColor: colorBtn.dataset.color });
+        const color = colorBtn.dataset.color;
+        console.log(`[PenToolbox] color selected: ${color}`);
+        appState.set({ penColor: color });
         this.reader.syncPenToolToRenderers();
       }
 
@@ -364,6 +389,7 @@ export class PenToolbox {
         const stampId = stampItemBtn.dataset.stampId;
         const stampObj = MUSICAL_STAMPS.find(s => s.id === stampId);
         if (stampObj) {
+          console.log(`[PenToolbox] stamp selected: ${stampObj.name}`);
           appState.set({ activePenTool: 'stamp', currentStamp: stampObj, isPenActive: true });
           this.isStampPickerOpen = false;
           this.container.querySelector('#stampPopover')?.classList.remove('open');
@@ -372,19 +398,48 @@ export class PenToolbox {
       }
     });
 
-    this.container.querySelector('#strokeSizeSlider')?.addEventListener('input', (e) => {
-      appState.set({ penSize: parseInt(e.target.value, 10) });
+    // 3. 粗细滑块与步进按钮
+    const slider = this.container.querySelector('#strokeSizeSlider');
+    const updateSize = (newSize) => {
+      const clamped = Math.max(2, Math.min(20, newSize));
+      appState.set({ penSize: clamped });
+      if (slider) slider.value = clamped;
+      const sizeText = this.container.querySelector('#penSizeValueText');
+      if (sizeText) sizeText.textContent = `${clamped} px`;
       this.reader.syncPenToolToRenderers();
+      console.log(`[PenToolbox] penSize updated -> ${clamped} px (activeTool:${appState.get('activePenTool')})`);
+    };
+
+    slider?.addEventListener('input', (e) => {
+      updateSize(parseInt(e.target.value, 10));
     });
 
-    this.container.querySelector('#undoBtn')?.addEventListener('click', () => {
+    this.container.querySelector('#penMinusSizeBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      updateSize((appState.get('penSize') || 4) - 1);
+    });
+
+    this.container.querySelector('#penPlusSizeBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      updateSize((appState.get('penSize') || 4) + 1);
+    });
+
+    // 4. 撤销 / 回退 / 清空
+    this.container.querySelector('#undoBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('[PenToolbox] undo triggered');
       this.reader.undoCurrentPage();
     });
-    this.container.querySelector('#redoBtn')?.addEventListener('click', () => {
+
+    this.container.querySelector('#redoBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      console.log('[PenToolbox] redo triggered');
       this.reader.redoCurrentPage();
     });
 
-    this.container.querySelector('#clearBtn')?.addEventListener('click', async () => {
+    this.container.querySelector('#clearBtn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      console.log('[PenToolbox] clear confirmation opened');
       const confirmed = await showConfirmDialog({
         title: '清空当前页批注',
         message: '确认清空当前页的所有手写笔迹吗？此操作无法撤销。',
@@ -393,19 +448,32 @@ export class PenToolbox {
         isDanger: true
       });
       if (confirmed) {
+        console.log('[PenToolbox] clear confirmed for page', this.reader.currentPage);
         this.reader.clearCurrentPage();
       }
     });
 
-    this.container.querySelector('#stampCloseBtn')?.addEventListener('click', () => {
+    // 5. 印章关闭按钮
+    this.container.querySelector('#stampCloseBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.isStampPickerOpen = false;
       this.container.querySelector('#stampPopover')?.classList.remove('open');
+    });
+
+    // 6. 点击外部自动收起 Popover
+    document.addEventListener('pointerdown', (e) => {
+      if (this.isExpanded && !this.container.contains(e.target)) {
+        // 若点击的是确认弹窗则不收起
+        if (e.target.closest('.confirm-dialog-overlay')) return;
+        this.toggle(false);
+      }
     });
   }
 
   syncActiveState() {
     const activeTool = appState.get('activePenTool');
     const activeColor = appState.get('penColor');
+    const currentSize = appState.get('penSize') || 4;
 
     this.container.querySelectorAll('.tool-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tool === activeTool);
@@ -414,6 +482,16 @@ export class PenToolbox {
     this.container.querySelectorAll('.color-dot').forEach(dot => {
       dot.classList.toggle('active', dot.dataset.color === activeColor);
     });
+
+    const sizeText = this.container.querySelector('#penSizeValueText');
+    if (sizeText) {
+      sizeText.textContent = `${currentSize} px`;
+    }
+
+    const slider = this.container.querySelector('#strokeSizeSlider');
+    if (slider && parseInt(slider.value, 10) !== currentSize) {
+      slider.value = currentSize;
+    }
 
     const toggleBtnText = this.container.querySelector('.pill-text');
     if (toggleBtnText) {

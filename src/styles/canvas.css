@@ -1,114 +1,138 @@
 /* ==========================================================================
-   LyraScore 手写笔浮动工具箱样式 (极致半透明水晶毛玻璃 + 全屏自由拖拽)
+   LyraScore 专业手写批注 Popover 面板样式 (与节拍器面板视觉方案完全一致)
    ========================================================================== */
 
-/* 浮动手写笔工具箱容器 */
+/* 浮动手写笔工具箱外层容器 */
 .floating-pen-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 80;
+  z-index: 85;
   touch-action: none;
   user-select: none;
 }
 
-.pen-toolbox {
-  background-color: var(--bg-glass, rgba(255, 255, 255, 0.88));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
-  border-radius: var(--radius-lg, 16px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px;
-  gap: 10px;
+.pen-toolbox-wrapper {
   position: relative;
-  max-width: 380px;
+  display: inline-flex;
+  align-items: center;
 }
 
-/* 折叠胶囊状态 (极致半透明毛玻璃) */
-.pen-toolbox.collapsed {
-  flex-direction: row;
-  border-radius: var(--radius-full, 9999px);
-  padding: 0;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-
-.pen-toolbox.collapsed .toolbox-content {
-  display: none;
-}
-
+/* 1. 悬浮胶囊主手柄 (与节拍器胶囊质感统一，可自由拖拽) */
 .toolbox-toggle-btn.draggable-pill {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgba(26, 86, 219, 0.42);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(26, 86, 219, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   color: #ffffff;
-  padding: 6px 14px;
+  padding: 7px 15px;
   border-radius: var(--radius-full, 9999px);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   cursor: grab;
-  box-shadow: 0 3px 12px rgba(26, 86, 219, 0.2);
+  box-shadow: 0 4px 16px rgba(26, 86, 219, 0.28);
   touch-action: none;
-  transition: background-color 0.2s ease, transform 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .toolbox-toggle-btn.draggable-pill:hover {
-  background: rgba(26, 86, 219, 0.65);
+  background: rgba(26, 86, 219, 0.9);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(26, 86, 219, 0.35);
 }
 .toolbox-toggle-btn.draggable-pill:active {
   cursor: grabbing;
-  background: rgba(26, 86, 219, 0.85);
-  transform: scale(0.96);
+  transform: scale(0.95);
+}
+.toolbox-toggle-btn.draggable-pill.active {
+  background: var(--accent-primary, #1a56db);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.3);
 }
 
-.pen-toolbox.expanded .toolbox-toggle-btn {
+/* 2. 与节拍器一脉相承的水晶毛玻璃 Popover 面板 */
+.pen-metro-popover {
   display: none;
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  width: 310px;
+  background-color: var(--bg-glass, rgba(255, 255, 255, 0.94));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.2));
+  padding: 14px 16px;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 95;
+  animation: penPopoverFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.toolbox-header-row {
+.pen-metro-popover.open {
+  display: flex;
+}
+
+@keyframes penPopoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 头部 Header */
+.pen-popover-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 4px;
-  border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  padding-bottom: 2px;
 }
-.toolbox-title {
+.popover-title {
   font-size: 13px;
   font-weight: 700;
   color: var(--text-primary, #111827);
 }
-.toolbox-minimize-btn {
-  border: none;
-  background: transparent;
-  color: var(--text-muted, #9ca3af);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.toolbox-minimize-btn:hover {
-  background: var(--bg-secondary, #f3f4f6);
-  color: var(--text-primary, #111827);
-}
 
-.toolbox-content {
+/* 3. 卡片分区 (与节拍器 .metro-custom-accents-section 统一) */
+.pen-section-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  background: var(--bg-secondary, #f3f4f6);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  padding: 8px 10px;
 }
 
-.tool-group {
+.section-card-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary, #4b5563);
+}
+
+.section-card-divider {
+  width: 100%;
+  height: 1px;
+  background-color: var(--border-color, rgba(0, 0, 0, 0.06));
+}
+
+/* 笔刷选择网格 */
+.tool-group-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
   gap: 4px;
-  flex-wrap: wrap;
 }
 
 .tool-btn {
@@ -116,25 +140,27 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 44px;
   height: 44px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: 8px;
   border: 1px solid transparent;
-  background: transparent;
+  background: var(--bg-surface, #ffffff);
   color: var(--text-secondary, #4b5563);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.12s ease;
   padding: 2px;
 }
 .tool-btn:hover {
-  background-color: var(--bg-secondary, #f3f4f6);
-  color: var(--text-primary, #111827);
-}
-.tool-btn.active {
-  background-color: var(--accent-light, #e0e7ff);
+  background-color: #ffffff;
   border-color: var(--accent-primary, #1a56db);
   color: var(--accent-primary, #1a56db);
-  font-weight: 600;
+  transform: translateY(-1px);
+}
+.tool-btn.active {
+  background-color: var(--accent-primary, #1a56db);
+  border-color: var(--accent-primary, #1a56db);
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(26, 86, 219, 0.35);
 }
 .tool-btn .tool-icon {
   font-size: 16px;
@@ -145,94 +171,134 @@
   margin-top: 2px;
 }
 
-.tool-divider {
-  width: 100%;
-  height: 1px;
-  background-color: var(--border-color, rgba(0, 0, 0, 0.08));
-}
-
-/* 调色盘与粗细 */
-.color-palette-group {
+/* 调色盘 */
+.color-palette-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 2px 4px;
 }
 .color-dot {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .color-dot:hover {
-  transform: scale(1.15);
+  transform: scale(1.18);
 }
 .color-dot.active {
-  border-color: var(--text-primary, #111827);
+  border-color: #ffffff;
   transform: scale(1.2);
-  box-shadow: 0 0 0 2px var(--bg-surface, #ffffff);
+  box-shadow: 0 0 0 2px var(--accent-primary, #1a56db);
 }
 
-.stroke-size-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.size-label {
-  font-size: 11px;
-  color: var(--text-muted, #6b7280);
-}
-.size-slider {
-  flex: 1;
-  accent-color: var(--accent-primary, #1a56db);
-  cursor: pointer;
-}
-
-/* 历史撤销与清空 */
-.history-group {
+/* 粗细步进器与滑块 (与节拍器 BPM 调节器完全统一) */
+.size-stepper-box {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.action-btn {
-  flex: 1;
-  height: 30px;
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+.stepper-step-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
   background: var(--bg-surface, #ffffff);
+  color: var(--text-primary, #111827);
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  transition: all 0.1s ease;
+}
+.stepper-step-btn:hover {
+  border-color: var(--accent-primary, #1a56db);
+  color: var(--accent-primary, #1a56db);
+}
+.stepper-step-btn:active {
+  transform: scale(0.9);
+}
+.size-badge-text {
   font-size: 11px;
-  color: var(--text-secondary, #4b5563);
-  cursor: pointer;
-}
-.action-btn:hover {
-  background: var(--bg-secondary, #f3f4f6);
-}
-.btn-clear-danger:hover {
-  color: #dc2626;
-  border-color: #fca5a5;
-  background: #fef2f2;
+  font-weight: 800;
+  color: var(--accent-primary, #1a56db);
+  min-width: 34px;
+  text-align: center;
 }
 
-/* 音乐印章面板 */
+.pen-slider-row {
+  display: flex;
+  width: 100%;
+}
+.size-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent-primary, #1a56db);
+  cursor: pointer;
+}
+
+/* 4. 历史撤销与清空卡片 */
+.pen-actions-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.action-btn {
+  flex: 1;
+  height: 32px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  background: var(--bg-secondary, #f3f4f6);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, #111827);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+.action-btn:hover {
+  background: var(--bg-surface, #ffffff);
+  border-color: var(--accent-primary, #1a56db);
+  color: var(--accent-primary, #1a56db);
+}
+.action-btn:active {
+  transform: scale(0.96);
+}
+.action-btn.btn-clear-danger {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+.action-btn.btn-clear-danger:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+/* 5. 印章选择面板 (与节拍器 Popover 风格统一) */
 .stamp-popover {
   display: none;
   position: absolute;
   bottom: calc(100% + 10px);
-  right: 0;
-  width: 320px;
-  background-color: var(--bg-surface, #ffffff);
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+  right: 320px;
+  width: 260px;
+  background-color: var(--bg-glass, rgba(255, 255, 255, 0.94));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
   border-radius: var(--radius-lg, 16px);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
-  padding: 14px;
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.2));
+  padding: 12px 14px;
   flex-direction: column;
   gap: 10px;
-  z-index: 80;
+  z-index: 100;
+  animation: penPopoverFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .stamp-popover.open {
   display: flex;
@@ -243,19 +309,28 @@
   justify-content: space-between;
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-secondary, #4b5563);
+  color: var(--text-primary, #111827);
+  border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  padding-bottom: 6px;
 }
 .stamp-close-btn {
   border: none;
   background: transparent;
   color: var(--text-muted, #9ca3af);
-  cursor: pointer;
   font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
+.stamp-close-btn:hover {
+  background: var(--bg-secondary, #f3f4f6);
+  color: var(--text-primary, #111827);
+}
+
 .stamp-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: 6px;
   max-height: 220px;
   overflow-y: auto;
 }
@@ -264,27 +339,25 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px 4px;
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg-secondary, #f3f4f6);
+  padding: 6px 2px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  background: var(--bg-surface, #ffffff);
   cursor: pointer;
-  gap: 4px;
+  transition: all 0.12s ease;
 }
 .stamp-item-btn:hover {
-  border-color: var(--accent-primary, #1a56db);
   background: var(--accent-light, #e0e7ff);
+  border-color: var(--accent-primary, #1a56db);
+  transform: scale(1.05);
 }
 .stamp-symbol {
-  font-size: 22px;
-  line-height: 1;
-  font-family: serif;
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--accent-primary, #1a56db);
 }
 .stamp-name {
-  font-size: 10px;
-  color: var(--text-secondary, #4b5563);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+  font-size: 9px;
+  color: var(--text-muted, #6b7280);
+  margin-top: 2px;
 }
