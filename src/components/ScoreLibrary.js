@@ -1,6 +1,6 @@
 /**
  * 乐谱库与分类中心 (ScoreLibrary Component)
- * 包含现代乐谱网格、可折叠侧边栏、调式分类、标签云过滤、搜索与文件导入
+ * 包含现代乐谱网格、可折叠侧边栏、调式分类、纯净标签分类、搜索与文件导入
  */
 
 import { scoreDB } from '../core/db.js';
@@ -85,9 +85,9 @@ export class ScoreLibrary {
             </button>
           </nav>
 
-          <!-- 调式快速分类 -->
+          <!-- 调式分类 -->
           <div class="sidebar-section">
-            <div class="section-title">调式分类 (Key)</div>
+            <div class="section-title">调式分类</div>
             <select class="form-select sidebar-select" id="keyFilterSelect">
               <option value="">全部调式 (24 大小调)</option>
               ${KEY_SIGNATURES.map(k => `
@@ -98,16 +98,16 @@ export class ScoreLibrary {
             </select>
           </div>
 
-          <!-- 自定义标签云 -->
+          <!-- 纯净标签分类 -->
           <div class="sidebar-section">
-            <div class="section-title">标签分类</div>
+            <div class="section-title">标签</div>
             <div class="tag-cloud" id="sidebarTagCloud"></div>
           </div>
 
           <div class="sidebar-footer">
             <div class="system-theme-switcher">
               <button class="theme-btn" data-theme="parchment" title="羊皮纸护眼主题">📜 羊皮纸</button>
-              <button class="theme-btn" data-theme="dark" title="夜间演奏深色主题">🌙 演奏厅</button>
+              <button class="theme-btn" data-theme="dark" title="夜间专注深色主题">🌙 专注厅</button>
               <button class="theme-btn" data-theme="light" title="极简纯白主题">☀️ 纯白</button>
             </div>
           </div>
@@ -158,7 +158,6 @@ export class ScoreLibrary {
   }
 
   bindEvents() {
-    // 侧边栏折叠与展开
     this.container.querySelector('#btnCollapseSidebar')?.addEventListener('click', () => {
       this.toggleSidebar(true);
     });
@@ -264,7 +263,7 @@ export class ScoreLibrary {
       <button class="tag-chip ${!this.selectedTag ? 'selected' : ''}" data-tag="">全部</button>
       ${Array.from(tagSet).map(tag => `
         <button class="tag-chip ${this.selectedTag === tag ? 'selected' : ''}" data-tag="${escapeHtml(tag)}">
-          #${escapeHtml(tag)}
+          ${escapeHtml(tag)}
         </button>
       `).join('')}
     `;
@@ -304,7 +303,7 @@ export class ScoreLibrary {
       gridEl.innerHTML = `
         <div class="empty-state" style="grid-column: 1 / -1; padding: 60px 20px; text-align: center;">
           <div class="empty-icon" style="font-size: 56px; margin-bottom: 16px;">🎼</div>
-          <h3 style="font-size: 22px; margin-bottom: 10px; color: var(--text-main, #1f2937);">
+          <h3 style="font-size: 20px; margin-bottom: 10px; color: var(--text-main, #1f2937);">
             ${this.scores.length === 0 ? '乐谱书架为空' : '未找到匹配的乐谱'}
           </h3>
           <p style="color: var(--text-muted, #6b7280); max-width: 480px; margin: 0 auto 24px; line-height: 1.6;">
@@ -312,7 +311,7 @@ export class ScoreLibrary {
               ? '点击下方按钮从平板中选择并导入您的第一本乐谱（支持 PDF / MusicXML / 高清乐谱图片）。' 
               : '请尝试更换搜索词或清除筛选条件。'}
           </p>
-          <button class="btn btn-primary btn-lg" id="btnEmptyStateImport" style="padding: 12px 28px; font-size: 16px; border-radius: 12px; cursor: pointer;">
+          <button class="btn btn-primary btn-lg" id="btnEmptyStateImport" style="padding: 10px 24px; font-size: 15px; border-radius: 10px; cursor: pointer;">
             📥 立即导入乐谱文件
           </button>
         </div>
@@ -354,23 +353,25 @@ export class ScoreLibrary {
 
             ${s.isCopy ? `
               <div class="card-copy-badge" title="独立手写批注副本">
-                🌿 副本: ${escapeHtml(s.copyNote || '练习版')}
+                副本: ${escapeHtml(s.copyNote || '练习版')}
               </div>
             ` : ''}
 
             <div class="card-meta-row">
               ${keyLabel ? `<span class="meta-key-badge">${keyLabel}</span>` : ''}
               ${(s.tags || []).slice(0, 3).map(t => `
-                <span class="meta-tag-pill">#${escapeHtml(t)}</span>
+                <span class="meta-tag-pill">${escapeHtml(t)}</span>
               `).join('')}
             </div>
 
             <div class="card-actions">
+              <!-- 去除图标，纯汉字开始阅读 -->
               <button class="btn btn-sm btn-primary action-open-btn" data-action="open">
-                📖 开始阅读
+                开始阅读
               </button>
+              <!-- 去除图标，纯汉字副本 -->
               <button class="btn btn-sm btn-outline" data-action="copy" title="创建独立练习/手写笔记副本">
-                🌿 副本
+                副本
               </button>
               <button class="btn-icon-more" data-action="edit" title="编辑元数据">
                 ✏️

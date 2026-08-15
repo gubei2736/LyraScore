@@ -220,20 +220,15 @@
   flex-shrink: 0;
 }
 
-/* 左右触控滑动缩放条 (Swipe Zoom Slider) */
+/* 左右触控滑动缩放条 (点击百分比快速复位100%) */
 .zoom-slider-box {
   display: flex;
   align-items: center;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
-  padding: 3px 10px 3px 8px;
+  padding: 3px 8px 3px 10px;
   gap: 6px;
-}
-.zoom-icon-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1;
 }
 .zoom-range-slider {
   width: 80px;
@@ -250,6 +245,18 @@
   color: var(--text-primary);
   min-width: 38px;
   text-align: right;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+.zoom-pct-display:hover {
+  color: var(--accent-primary, #1a56db);
+  background-color: var(--bg-surface);
+}
+.zoom-pct-display:active {
+  transform: scale(0.92);
 }
 
 .layout-toggle-group {

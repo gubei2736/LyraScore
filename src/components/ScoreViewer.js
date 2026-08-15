@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读与专注模式主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部控制条（内嵌极简滑动缩放条、一体化翻页控制与定时翻页）、单/双页排版与自由拖拽手写笔工具箱
+ * 包含沉浸式视口、顶部控制条（内嵌触控滑动缩放条支持点击100%一键复位、一体化翻页控制与定时翻页）、单/双页排版与手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -68,10 +68,10 @@ export class ScoreViewer {
           </div>
 
           <div class="topbar-right">
-            <!-- 极简触控滑动缩放条 (去除了放大镜图标，支持屏幕双指联动) -->
-            <div class="zoom-slider-box" title="左右滑动或在屏幕上双指捏合缩放乐谱">
+            <!-- 触控滑动缩放条 (点击百分比可一键复位100%) -->
+            <div class="zoom-slider-box" title="左右滑动缩放乐谱，点击百分比一键复位100%">
               <input type="range" class="zoom-range-slider" id="zoomRangeSlider" min="60" max="260" step="5" value="100">
-              <span class="zoom-pct-display" id="zoomLabel">100%</span>
+              <span class="zoom-pct-display" id="zoomLabel" title="点击一键复位为 100%">100%</span>
             </div>
 
             <!-- 排版模式切换 (仅单页/双页，竖屏仅单页) -->
@@ -236,6 +236,14 @@ export class ScoreViewer {
       this.reader.setZoom(this.currentZoom);
     });
 
+    // 点击百分比一键复位为 100%
+    const zoomLabel = this.container.querySelector('#zoomLabel');
+    zoomLabel?.addEventListener('click', () => {
+      this.currentZoom = 1.0;
+      this.reader.setZoom(1.0);
+      this.updateZoomLabel();
+    });
+
     // 排版模式切换
     this.container.querySelectorAll('.layout-toggle-group button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -307,7 +315,7 @@ export class ScoreViewer {
       badgesRow.innerHTML = `
         <span class="meta-tag-pill">${score.format.toUpperCase()}</span>
         ${keyObj ? `<span class="meta-key-badge">${keyObj.name.split(' (')[0]}</span>` : ''}
-        ${score.isCopy ? `<span class="card-copy-badge">🌿 副本: ${score.copyNote || ''}</span>` : ''}
+        ${score.isCopy ? `<span class="card-copy-badge">副本: ${score.copyNote || ''}</span>` : ''}
       `;
     }
 
