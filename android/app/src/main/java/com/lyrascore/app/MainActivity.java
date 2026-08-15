@@ -78,8 +78,21 @@ public class MainActivity extends Activity {
             );
         }
 
-        // 5. 原生系统文件导入选择器通道 (PDF / MusicXML / 图片)
+        // 5. 原生系统文件导入选择器通道 + JS console.log 桥接到 logcat
         webView.setWebChromeClient(new WebChromeClient() {
+
+            // JS console.log/warn/error -> Android logcat (tag: LyraScore-JS)
+            @Override
+            public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                String msg = consoleMessage.message() + " -- From line " + consoleMessage.lineNumber() + " of " + consoleMessage.sourceId();
+                switch (consoleMessage.messageLevel()) {
+                    case ERROR:   Log.e("LyraScore-JS", msg); break;
+                    case WARNING: Log.w("LyraScore-JS", msg); break;
+                    default:      Log.d("LyraScore-JS", msg); break;
+                }
+                return true;
+            }
+
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (mFilePathCallback != null) {
@@ -116,6 +129,7 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
+
 
         // 6. 异常拦截与诊断处理
         webView.setWebViewClient(new WebViewClient() {

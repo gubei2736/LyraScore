@@ -327,6 +327,8 @@ export class ScoreReader {
         this.strokesMemoryCache.set(pageIdx, [...sr.strokes]);
       }
     }
+    // 清理旧渲染器（在创建新页面前执行，确保不覆盖新注册的实例）
+    this.clearStrokes();
 
     try {
       const vpWidth = this.viewportEl?.clientWidth || window.innerWidth;
@@ -420,7 +422,7 @@ export class ScoreReader {
    * 无缝平滑替换舞台内容 (Cross-Fade 交叉淡入淡出，彻底消除白屏闪烁)
    */
   applyNewStage(newStageElement, smoothTransition) {
-    this.clearStrokes();
+    // clearStrokes() 已在 renderCurrentLayout 开头执行，此处不再重复清理
 
     if (smoothTransition) {
       newStageElement.style.opacity = '0';
@@ -535,12 +537,7 @@ export class ScoreReader {
     for (const [pageIndex, sr] of this.strokeRenderers.entries()) {
       sr.canvas.style.pointerEvents = isPenActive ? 'auto' : 'none';
       sr.canvas.style.touchAction = isPenActive ? 'none' : 'auto';
-      sr.setBrush({
-        tool: tool,
-        color: color,
-        size: size,
-        stamp: stamp
-      });
+      sr.setBrush({ tool, color, size, stamp });
     }
   }
 

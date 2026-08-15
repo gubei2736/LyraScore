@@ -222,11 +222,11 @@ export class StrokeRenderer {
 
     const strokeOptions = {
       size: isHighlighter ? this.brush.size * 3.5 : this.brush.size,
-      thinning: isFountain ? 0.45 : 0.0,
+      thinning: isFountain ? 0.3 : 0.0,
       smoothing: 0.5,
-      streamline: 0.25, // 降低滞后系数，保持笔画拐弯处高灵敏度
-      start: { taper: isFountain ? 8 : 0 },
-      end: { taper: isFountain ? 10 : 0 }
+      streamline: 0.25,
+      start: { taper: isFountain ? this.brush.size * 1.5 : 0 },
+      end:   { taper: isFountain ? this.brush.size * 2.0 : 0 }
     };
 
     const outline = getStroke(pointsToRender, strokeOptions);
@@ -250,11 +250,11 @@ export class StrokeRenderer {
 
         const strokeOptions = {
           size: isHighlighter ? item.size * 3.5 : item.size,
-          thinning: isFountain ? 0.45 : 0.0,
+          thinning: isFountain ? 0.3 : 0.0,
           smoothing: 0.5,
           streamline: 0.25,
-          start: { taper: isFountain ? 8 : 0 },
-          end: { taper: isFountain ? 10 : 0 }
+          start: { taper: isFountain ? item.size * 1.5 : 0 },
+          end:   { taper: isFountain ? item.size * 2.0 : 0 }
         };
 
         const outline = getStroke(item.points, strokeOptions);

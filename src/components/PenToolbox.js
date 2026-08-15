@@ -349,15 +349,13 @@ export class PenToolbox {
           this.isStampPickerOpen = false;
           this.container.querySelector('#stampPopover')?.classList.remove('open');
         }
-
         appState.set({ activePenTool: tool, isPenActive: true });
         this.reader.syncPenToolToRenderers();
       }
 
       const colorBtn = e.target.closest('.color-dot');
       if (colorBtn) {
-        const color = colorBtn.dataset.color;
-        appState.set({ penColor: color });
+        appState.set({ penColor: colorBtn.dataset.color });
         this.reader.syncPenToolToRenderers();
       }
 
@@ -366,11 +364,7 @@ export class PenToolbox {
         const stampId = stampItemBtn.dataset.stampId;
         const stampObj = MUSICAL_STAMPS.find(s => s.id === stampId);
         if (stampObj) {
-          appState.set({
-            activePenTool: 'stamp',
-            currentStamp: stampObj,
-            isPenActive: true
-          });
+          appState.set({ activePenTool: 'stamp', currentStamp: stampObj, isPenActive: true });
           this.isStampPickerOpen = false;
           this.container.querySelector('#stampPopover')?.classList.remove('open');
           this.reader.syncPenToolToRenderers();
@@ -379,8 +373,7 @@ export class PenToolbox {
     });
 
     this.container.querySelector('#strokeSizeSlider')?.addEventListener('input', (e) => {
-      const size = parseInt(e.target.value, 10);
-      appState.set({ penSize: size });
+      appState.set({ penSize: parseInt(e.target.value, 10) });
       this.reader.syncPenToolToRenderers();
     });
 
