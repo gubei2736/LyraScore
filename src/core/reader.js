@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、双指平滑缩放手势 (Pinch-to-Zoom) 与单双页高清排版
+ * 具备防循环闪烁保护、手势穿透与原生垂直顺畅滚动支持
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -36,7 +36,6 @@ export class ScoreReader {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
           const currentWidth = this.viewportEl?.clientWidth || window.innerWidth;
-          // 仅在宽度发生实质变化（例如旋转屏幕）时才触发重排，彻底消灭死循环闪烁
           if (Math.abs(currentWidth - this.lastRenderedWidth) > 20) {
             this.renderCurrentLayout();
           }
@@ -75,7 +74,6 @@ export class ScoreReader {
     this.viewportEl?.addEventListener('touchend', (e) => {
       if (e.touches.length < 2 && initialDistance > 0) {
         initialDistance = 0;
-        // 保持平滑缩放
       }
     }, { passive: true });
   }
@@ -173,7 +171,7 @@ export class ScoreReader {
         return;
       }
 
-      // PDF 与 图片乐谱渲染
+      // PDF 与 图片乐谱渲染 (单页 / 双页)
       if (mode === 'double' && this.totalPages > 1) {
         const doubleContainer = document.createElement('div');
         doubleContainer.className = 'score-double-container';
@@ -192,16 +190,6 @@ export class ScoreReader {
         }
 
         this.container.appendChild(doubleContainer);
-      } else if (mode === 'scroll') {
-        const scrollContainer = document.createElement('div');
-        scrollContainer.className = 'score-scroll-container';
-
-        const pageWidth = Math.min(containerWidth, 980);
-        for (let i = 0; i < this.totalPages; i++) {
-          const pageEl = await this.createPageElement(i, pageWidth);
-          if (pageEl) scrollContainer.appendChild(pageEl);
-        }
-        this.container.appendChild(scrollContainer);
       } else {
         // 单页模式
         const singleContainer = document.createElement('div');
@@ -268,7 +256,9 @@ export class ScoreReader {
     const stamp = appState.get('currentStamp');
 
     for (const [pageIndex, sr] of this.strokeRenderers.entries()) {
+      // 关键：非手写模式完全穿透，支持手指顺畅上下滑动
       sr.canvas.style.pointerEvents = isPenActive ? 'auto' : 'none';
+      sr.canvas.style.touchAction = isPenActive ? 'none' : 'auto';
       sr.setBrush({
         tool: tool,
         color: color,
@@ -311,7 +301,7 @@ export class ScoreReader {
   }
 
   setLayoutMode(mode) {
-    if (['single', 'double', 'scroll'].includes(mode)) {
+    if (['single', 'double'].includes(mode)) {
       this.layoutMode = mode;
       appState.set({ layoutMode: mode });
       this.renderCurrentLayout();

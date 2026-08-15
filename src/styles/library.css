@@ -1,5 +1,5 @@
 /* ==========================================================================
-   LyraScore 乐谱库与双栏平板网格样式 (支持侧边栏平滑折叠)
+   LyraScore 乐谱库与双栏平板网格样式 (现代高级设计系统)
    ========================================================================== */
 
 .library-container {
@@ -21,7 +21,7 @@
   display: flex;
   flex-direction: column;
   padding: 20px 16px;
-  gap: 18px;
+  gap: 16px;
   overflow-y: auto;
   transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), min-width 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
   z-index: 40;
@@ -67,8 +67,8 @@
 }
 
 .sidebar-collapse-toggle-btn {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
@@ -78,6 +78,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.15s ease;
 }
 .sidebar-collapse-toggle-btn:hover {
   background-color: var(--border-color);
@@ -114,7 +115,7 @@
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   text-align: left;
@@ -174,9 +175,10 @@
   color: var(--accent-primary);
 }
 .tag-chip.selected {
-  background-color: var(--accent-primary);
-  border-color: var(--accent-primary);
+  background: var(--accent-gradient);
+  border-color: transparent;
   color: #ffffff;
+  box-shadow: var(--shadow-accent);
 }
 
 .sidebar-footer {
@@ -197,6 +199,7 @@
   background: var(--bg-surface);
   color: var(--text-secondary);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 .theme-btn:hover {
   background: var(--bg-secondary);
@@ -213,19 +216,19 @@
 }
 
 .library-header {
-  padding: 12px 20px;
+  padding: 10px 18px;
   background-color: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
 }
 
 .sidebar-expand-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -235,6 +238,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 .sidebar-expand-btn:hover {
   background-color: var(--border-color);
@@ -250,12 +254,18 @@
   padding: 6px 14px;
   flex: 1;
   max-width: 440px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.search-bar-box:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-light);
+  background-color: var(--bg-surface);
 }
 .search-input {
   border: none;
   background: transparent;
   outline: none;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-primary);
   width: 100%;
   user-select: text;
@@ -281,9 +291,10 @@
   background-color: var(--bg-secondary);
 }
 .filter-pill.active {
-  background-color: var(--accent-primary);
-  border-color: var(--accent-primary);
+  background: var(--accent-gradient);
+  border-color: transparent;
   color: #ffffff;
+  box-shadow: var(--shadow-accent);
 }
 
 /* 拖拽提示 */
@@ -322,11 +333,11 @@
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-sm);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
   position: relative;
 }
 .score-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-md);
   border-color: var(--accent-primary);
 }
@@ -352,7 +363,7 @@
   transition: transform 0.3s ease;
 }
 .score-card:hover .card-cover-img {
-  transform: scale(1.03);
+  transform: scale(1.04);
 }
 
 .card-cover-placeholder {
@@ -374,7 +385,7 @@
   padding: 2px 7px;
   font-size: 10px;
   font-weight: 700;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   color: #ffffff;
   letter-spacing: 0.5px;
 }
@@ -390,7 +401,7 @@
   height: 30px;
   border-radius: 50%;
   border: none;
-  background-color: rgba(255, 255, 255, 0.85);
+  background-color: rgba(255, 255, 255, 0.9);
   color: var(--text-muted);
   font-size: 16px;
   display: flex;
@@ -398,6 +409,10 @@
   justify-content: center;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.favorite-star-btn:hover {
+  transform: scale(1.15);
 }
 .favorite-star-btn.favorited {
   color: #f59e0b;
@@ -432,7 +447,7 @@
   color: var(--badge-copy);
   background-color: rgba(6, 148, 162, 0.12);
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   width: fit-content;
 }
 
@@ -449,15 +464,15 @@
   background-color: var(--bg-secondary);
   color: var(--accent-primary);
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   border: 1px solid var(--border-color);
 }
 .meta-tag-pill {
   font-size: 10px;
   color: var(--text-muted);
   background-color: var(--bg-secondary);
-  padding: 2px 5px;
-  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
 }
 
 .card-actions {
@@ -477,11 +492,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-color);
   background: var(--bg-surface);
   color: var(--text-secondary);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 .btn-icon-more:hover {
   background: var(--bg-secondary);

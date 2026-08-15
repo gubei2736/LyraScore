@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读与演奏主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页与缩放微调）、单/双页排版（横竖屏智能约束）与自由拖拽手写笔工具箱
+ * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页与缩放微调）、单/双页排版与自由拖拽手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -36,10 +36,10 @@ export class ScoreViewer {
   render() {
     this.container.innerHTML = `
       <div class="score-viewer-layout">
-        <!-- 顶部紧凑演奏工具栏 (响应式流式布局) -->
+        <!-- 顶部紧凑演奏工具栏 (精致流式对齐) -->
         <header class="reader-topbar" id="readerTopbar">
           <div class="topbar-left">
-            <button class="btn btn-ghost topbar-back-btn" id="readerBackBtn" title="返回乐谱库">
+            <button class="btn btn-secondary btn-sm topbar-back-btn" id="readerBackBtn" title="返回乐谱库">
               <span class="btn-icon">◀</span>
               <span class="back-text">书架</span>
             </button>
@@ -94,10 +94,10 @@ export class ScoreViewer {
 
         <!-- 核心乐谱阅读视口 (支持原生上下顺畅滑动) -->
         <main class="score-viewport-container" id="scoreViewport">
-          <!-- 左右触控翻页热区 (适合弹琴时轻触边缘快速翻谱) -->
-          <div class="touch-hotzone hotzone-left" id="hotzoneLeft" title="点击上一页"></div>
-          <div class="touch-hotzone hotzone-center" id="hotzoneCenter" title="点击唤出/隐藏工具条"></div>
-          <div class="touch-hotzone hotzone-right" id="hotzoneRight" title="点击下一页"></div>
+          <!-- 左右触控翻页微型热区 (仅两端窄条) -->
+          <div class="touch-hotzone hotzone-left" id="hotzoneLeft" title="上一页"></div>
+          <div class="touch-hotzone hotzone-center" id="hotzoneCenter" title="唤出/隐藏工具栏"></div>
+          <div class="touch-hotzone hotzone-right" id="hotzoneRight" title="下一页"></div>
 
           <!-- 乐谱页面承载区域 -->
           <div class="score-pages-stage" id="scorePagesStage"></div>
@@ -177,12 +177,23 @@ export class ScoreViewer {
     }
   }
 
+  closeViewer() {
+    this.setStageMode(false);
+    this.autoFlip.pause();
+    wakeLockManager.release();
+    if (this.penToolbox) {
+      this.penToolbox.toggle(false);
+    }
+    const penContainer = this.container.querySelector('#floatingPenContainer');
+    if (penContainer) {
+      penContainer.style.display = 'none';
+    }
+  }
+
   bindEvents() {
     // 返回书架
     this.container.querySelector('#readerBackBtn')?.addEventListener('click', () => {
-      this.setStageMode(false);
-      this.autoFlip.pause();
-      wakeLockManager.release();
+      this.closeViewer();
       this.onBackToLibrary();
     });
 
@@ -220,7 +231,7 @@ export class ScoreViewer {
       this.updateZoomLabel();
     });
 
-    // 排版模式切换（只处理单页和双页）
+    // 排版模式切换
     this.container.querySelectorAll('.layout-toggle-group button').forEach(btn => {
       btn.addEventListener('click', () => {
         if (btn.disabled) return;
@@ -272,6 +283,11 @@ export class ScoreViewer {
     this.setStageMode(false);
     this.currentZoom = 1.0;
     this.updateZoomLabel();
+
+    const penContainer = this.container.querySelector('#floatingPenContainer');
+    if (penContainer) {
+      penContainer.style.display = 'block';
+    }
 
     const titleEl = this.container.querySelector('#viewerScoreTitle');
     const badgesRow = this.container.querySelector('#viewerBadgesRow');
