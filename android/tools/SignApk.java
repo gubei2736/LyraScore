@@ -35,13 +35,14 @@ public class SignApk {
             ApkSigner signer = new ApkSigner.Builder(Collections.singletonList(config))
                 .setInputApk(inApk)
                 .setOutputApk(outApk)
+                .setMinSdkVersion(21) // 设为 21 强制启用 v1 + v2 + v3 全部三代签名方案
                 .setV1SigningEnabled(true)
                 .setV2SigningEnabled(true)
                 .setV3SigningEnabled(true)
                 .build();
 
             signer.sign();
-            System.out.println("[SignApk] Successfully signed: " + outApk.getAbsolutePath());
+            System.out.println("[SignApk] Successfully signed (v1+v2+v3): " + outApk.getAbsolutePath());
         } catch (Exception e) {
             e.printStackTrace();
             System.exit(1);

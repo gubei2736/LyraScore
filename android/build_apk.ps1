@@ -3,19 +3,13 @@ $ErrorActionPreference = "Continue"
 $androidDir  = "G:\Project\android"
 $projectRoot = "G:\Project"
 
-$JAVA_HOME      = "D:\Public_Environment\JDK"
-$java           = "$JAVA_HOME\bin\java.exe"
-$javac          = "$JAVA_HOME\bin\javac.exe"
-$jar            = "$JAVA_HOME\bin\jar.exe"
-$keytool        = "$JAVA_HOME\bin\keytool.exe"
-
+# Toolchain absolute paths
 $androidJar     = "D:\Public_Environment\AndroidSDK\platforms\android-34\android.jar"
-$aapt2          = "D:\Public_Environment\AndroidSDK\build-tools\34.0.0\aapt2.exe"
 $r8Jar          = "D:\Public_Environment\Cache\r8.jar"
 $apksignerJar   = "D:\Public_Environment\AndroidSDK\build-tools\34.0.0\apksigner.jar"
-
 $npmPath        = "D:\Public_Environment\Node\nvm\v20.18.0\npm.cmd"
 
+# Project paths
 $androidSrc     = "$androidDir\app\src\main"
 $buildDir       = "$androidDir\app\build\pack"
 $toolsDir       = "$androidDir\tools"
@@ -27,7 +21,7 @@ Write-Host "         LyraScore - Android APK Builder           " -ForegroundColo
 Write-Host "         Target: Android 7.0 - Android 16 (API 35) " -ForegroundColor Cyan
 Write-Host "===================================================" -ForegroundColor Cyan
 
-# Step 1: Frontend Build
+# Step 1: Frontend Vite Build
 Write-Host "`n[1/5] Building Web App (Vite)..." -ForegroundColor Yellow
 Set-Location $projectRoot
 if (Test-Path $npmPath) {
@@ -40,7 +34,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Step 2: Sync assets to Android project
+# Step 2: Sync assets to Android assets/dist
 Write-Host "`n[2/5] Syncing assets to Android assets/dist..." -ForegroundColor Yellow
 $targetAssets = "$androidSrc\assets\dist"
 if (Test-Path $targetAssets) {
@@ -51,17 +45,21 @@ Copy-Item -Path "$projectRoot\dist\*" -Destination $targetAssets -Recurse -Force
 $assetCount = (Get-ChildItem $targetAssets -Recurse -File).Count
 Write-Host "  Synced $assetCount asset files" -ForegroundColor Green
 
-# Step 3: Prepare build dir
+# Step 3: Clean and init build dir
 if (Test-Path $buildDir) {
     Remove-Item $buildDir -Recurse -Force
 }
-New-Item -ItemType Directory -Path "$buildDir\gen" -Force | Out-Null
-New-Item -ItemType Directory -Path "$buildDir\classes" -Force | Out-Null
-New-Item -ItemType Directory -Path "$buildDir\dex" -Force | Out-Null
-New-Item -ItemType Directory -Path "$buildDir\apk_contents" -Force | Out-Null
+New-Item -ItemType Directory -Path "$buildDir\res_flat", "$buildDir\gen", "$buildDir\classes", "$buildDir\dex", "$buildDir\apk_contents" -Force | Out-Null
 
-# Step 4: Link resources via AAPT2 (targetSdkVersion 35)
-Write-Host "`n[3/5] Linking Android resources (AAPT2, targetSdk 35)..." -ForegroundColor Yellow
+# Step 4: Compile resources and generate base APK
+Write-Host "`n[3/5] Compiling resources & manifest (AAPT2)..." -ForegroundColor Yellow
+$resDir = "$androidSrc\res"
+$flatFiles = @()
+if (Test-Path $resDir) {
+    & "D:\Public_Environment\AndroidSDK\build-tools\34.0.0\aapt2.exe" compile --dir $resDir -o "$buildDir\res_flat" 2>&1 | Out-Null
+    $flatFiles = (Get-ChildItem "$buildDir\res_flat" -Filter "*.flat").FullName
+}
+
 $resApk = "$buildDir\resources.apk"
 $linkArgs = @(
     "link",
@@ -75,57 +73,73 @@ $linkArgs = @(
     "-o", $resApk,
     "--auto-add-overlay"
 )
-& $aapt2 @linkArgs 2>&1 | Out-Null
-Write-Host "  AAPT2 base package created with targetSdk=35" -ForegroundColor Green
+foreach ($f in $flatFiles) { $linkArgs += @("-R", $f) }
+& "D:\Public_Environment\AndroidSDK\build-tools\34.0.0\aapt2.exe" @linkArgs 2>&1 | Out-Null
+Write-Host "  AAPT2 resources compiled (targetSdk=35)" -ForegroundColor Green
 
-# Step 5: Compile Java & Build DEX
+# Step 5: Compile Java & generate DEX
 Write-Host "`n[4/5] Compiling Java & generating DEX (D8)..." -ForegroundColor Yellow
 $javaSources = @()
 Get-ChildItem "$androidSrc\java" -Filter "*.java" -Recurse | ForEach-Object { $javaSources += $_.FullName }
 Get-ChildItem "$buildDir\gen" -Filter "*.java" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $javaSources += $_.FullName }
-& $javac -encoding UTF-8 -classpath $androidJar -source 11 -target 11 -d "$buildDir\classes" @javaSources 2>&1 | Out-Null
+& "D:\Public_Environment\JDK\bin\javac.exe" -encoding UTF-8 -classpath $androidJar -source 11 -target 11 -d "$buildDir\classes" @javaSources 2>&1 | Out-Null
 
 $classJar = "$buildDir\classes.jar"
-& $jar cf $classJar -C "$buildDir\classes" "."
-& $java -cp $r8Jar com.android.tools.r8.D8 --lib $androidJar --output "$buildDir\dex" --min-api 24 $classJar 2>&1 | Out-Null
+& "D:\Public_Environment\JDK\bin\jar.exe" cf $classJar -C "$buildDir\classes" "."
+& "D:\Public_Environment\JDK\bin\java.exe" -cp $r8Jar com.android.tools.r8.D8 --lib $androidJar --output "$buildDir\dex" --min-api 24 $classJar 2>&1 | Out-Null
+Write-Host "  classes.dex generated successfully" -ForegroundColor Green
 
-# Step 6: Assemble raw APK with standard Unix forward-slashes
+# Step 6: Assemble APK with standard Unix forward-slashes
 Write-Host "`n[5/5] Assembling & Signing APK (v1 + v2 + v3 Scheme)..." -ForegroundColor Yellow
-Copy-Item $resApk "$buildDir\resources.zip" -Force
-Expand-Archive -Path "$buildDir\resources.zip" -DestinationPath "$buildDir\apk_contents" -Force
-Copy-Item "$buildDir\dex\classes.dex" "$buildDir\apk_contents\" -Force
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$resZip = [System.IO.Compression.ZipFile]::OpenRead($resApk)
+foreach ($entry in $resZip.Entries) {
+    $targetPath = [System.IO.Path]::Combine("$buildDir\apk_contents", $entry.FullName)
+    $dir = [System.IO.Path]::GetDirectoryName($targetPath)
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $targetPath, $true)
+}
+$resZip.Dispose()
+
+Copy-Item "$buildDir\dex\classes.dex" "$buildDir\apk_contents\classes.dex" -Force
 
 $distDst = "$buildDir\apk_contents\assets\dist"
-New-Item -ItemType Directory -Path $distDst -Force | Out-Null
+if (-not (Test-Path $distDst)) { New-Item -ItemType Directory -Path $distDst -Force | Out-Null }
 Copy-Item "$targetAssets\*" $distDst -Recurse -Force
 
-$rawApk = "$buildDir\app-unaligned.apk"
-if (Test-Path $rawApk) { Remove-Item $rawApk -Force }
+$unalignedApk = "$buildDir\app-unaligned.apk"
+if (Test-Path $unalignedApk) { Remove-Item $unalignedApk -Force }
 
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::Open($rawApk, "Create")
-$apkContentPath = (Resolve-Path "$buildDir\apk_contents").Path
-Get-ChildItem $apkContentPath -Recurse -File | ForEach-Object {
-    $full = $_.FullName
-    $entryName = $full.Substring($apkContentPath.Length + 1).Replace("\", "/")
-    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $full, $entryName, "Optimal") | Out-Null
+$zipOut = [System.IO.Compression.ZipFile]::Open($unalignedApk, "Create")
+$baseContentDir = (Resolve-Path "$buildDir\apk_contents").Path
+$filesToPack = Get-ChildItem $baseContentDir -Recurse -File
+foreach ($fileItem in $filesToPack) {
+    $full = $fileItem.FullName
+    $rel = $full.Substring($baseContentDir.Length + 1).Replace("\", "/")
+    $level = [System.IO.Compression.CompressionLevel]::Optimal
+    if ($rel -eq "resources.arsc") {
+        $level = [System.IO.Compression.CompressionLevel]::NoCompression
+    }
+    [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zipOut, $full, $rel, $level) | Out-Null
 }
-$zip.Dispose()
+$zipOut.Dispose()
 
-# Keystore & Sign
+# Keystore
 if (-not (Test-Path $keystorePath)) {
-    & $keytool -genkey -v -keystore $keystorePath -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US" 2>&1 | Out-Null
+    & "D:\Public_Environment\JDK\bin\keytool.exe" -genkey -v -keystore $keystorePath -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US" 2>&1 | Out-Null
 }
 
-& $javac -encoding UTF-8 -cp $apksignerJar -d $toolsDir "$toolsDir\SignApk.java" "$toolsDir\VerifyApk.java" 2>&1 | Out-Null
-& $java -cp "$toolsDir;$apksignerJar" com.lyrascore.tools.SignApk $rawApk $outputApk $keystorePath "androiddebugkey" "android"
-& $java -cp "$toolsDir;$apksignerJar" com.lyrascore.tools.VerifyApk $outputApk
+# Sign and verify
+& "D:\Public_Environment\JDK\bin\javac.exe" -encoding UTF-8 -cp $apksignerJar -d $toolsDir "$toolsDir\SignApk.java" "$toolsDir\VerifyApk.java" 2>&1 | Out-Null
+& "D:\Public_Environment\JDK\bin\java.exe" -cp "$toolsDir;$apksignerJar" com.lyrascore.tools.SignApk $unalignedApk $outputApk $keystorePath "androiddebugkey" "android"
+& "D:\Public_Environment\JDK\bin\java.exe" -cp "$toolsDir;$apksignerJar" com.lyrascore.tools.VerifyApk $outputApk
 
-# Cleanup temp build
+# Cleanup temp
 Remove-Item $buildDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "`n=== APK Package Verification ===" -ForegroundColor Cyan
-& $aapt2 dump badging $outputApk | Select-String -Pattern "package:|sdkVersion:|targetSdkVersion:|uses-permission:|launchable-activity:" | ForEach-Object { "  $_" }
+& "D:\Public_Environment\AndroidSDK\build-tools\34.0.0\aapt2.exe" dump badging $outputApk | Select-String -Pattern "package:|sdkVersion:|targetSdkVersion:|application-label:|launchable-activity:" | ForEach-Object { "  $_" }
 
 if (Test-Path $outputApk) {
     $sizeMB = [math]::Round((Get-Item $outputApk).Length / 1MB, 2)
