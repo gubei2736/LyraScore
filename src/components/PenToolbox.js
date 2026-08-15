@@ -66,27 +66,32 @@ export class PenToolbox {
         this.container.style.right = '';
         this.container.style.bottom = '';
       } else {
-        this.adjustPositionForExpandedPanel();
+        this.adjustPopoverSmartPosition();
       }
       return;
     }
 
-    const maxLeft = Math.max(8, window.innerWidth - (this.isExpanded ? 330 : 76));
-    const maxTop = Math.max(56, window.innerHeight - (this.isExpanded ? 380 : 56));
+    const pillWidth = 84;
+    const pillHeight = 40;
+    const maxLeft = Math.max(8, window.innerWidth - pillWidth - 8);
+    const maxTop = Math.max(52, window.innerHeight - pillHeight - 8);
 
     let newLeft = this.anchorRatioX * window.innerWidth;
     let newTop = this.anchorRatioY * window.innerHeight;
 
     newLeft = Math.min(Math.max(8, newLeft), maxLeft);
-    newTop = Math.min(Math.max(56, newTop), maxTop);
+    newTop = Math.min(Math.max(52, newTop), maxTop);
 
     this.userAnchorLeft = newLeft;
     this.userAnchorTop = newTop;
 
+    this.container.style.left = `${Math.round(newLeft)}px`;
+    this.container.style.top = `${Math.round(newTop)}px`;
+    this.container.style.right = 'auto';
+    this.container.style.bottom = 'auto';
+
     if (this.isExpanded) {
-      this.adjustPositionForExpandedPanel();
-    } else {
-      this.restoreUserAnchorPosition();
+      this.adjustPopoverSmartPosition();
     }
   }
 
@@ -108,16 +113,10 @@ export class PenToolbox {
     }
 
     if (this.isExpanded) {
-      if (this.userAnchorLeft === null) {
-        const r = this.container.getBoundingClientRect();
-        this.userAnchorLeft = r.left;
-        this.userAnchorTop = r.top;
-      }
-      this.adjustPositionForExpandedPanel();
+      this.adjustPopoverSmartPosition();
     } else {
       this.isStampPickerOpen = false;
       this.container.querySelector('#stampPopover')?.classList.remove('open');
-      this.restoreUserAnchorPosition();
     }
 
     // 手写批注模式始终保持激活，与面板展开/收起状态完全解耦
@@ -126,54 +125,63 @@ export class PenToolbox {
     console.log(`[PenToolbox] toggle -> isExpanded:${this.isExpanded}, isPenActive:true, currentTool:${appState.get('activePenTool')}, size:${appState.get('penSize')}`);
   }
 
-  adjustPositionForExpandedPanel() {
+  /**
+   * 智能视口碰撞自适应：根据胶囊所在屏幕象限自动调整 Popover 展开朝向与偏移，100% 杜绝裁切
+   */
+  adjustPopoverSmartPosition() {
     requestAnimationFrame(() => {
-      const container = this.container;
-      const rect = container.getBoundingClientRect();
-      const panelWidth = 320;
-      const panelHeight = 360;
+      const popover = this.container.querySelector('#penToolboxPopover');
+      const stampPopover = this.container.querySelector('#stampPopover');
+      if (!popover) return;
 
-      let safeLeft = this.userAnchorLeft !== null ? this.userAnchorLeft : rect.left;
-      let safeTop = this.userAnchorTop !== null ? this.userAnchorTop : rect.top;
+      const containerRect = this.container.getBoundingClientRect();
+      const popoverWidth = 310;
+      const popoverHeight = 360;
 
-      if (safeLeft + panelWidth > window.innerWidth - 12) {
-        safeLeft = window.innerWidth - panelWidth - 12;
-      }
-      if (safeLeft < 12) {
-        safeLeft = 12;
-      }
-      if (safeTop + panelHeight > window.innerHeight - 12) {
-        safeTop = window.innerHeight - panelHeight - 12;
-      }
-      if (safeTop < 56) {
-        safeTop = 56;
+      // 1. 垂直方向判断：胶囊在屏幕上半区则向下展开，下半区则向上展开
+      if (containerRect.top < popoverHeight + 60) {
+        // 向下展开
+        popover.style.bottom = 'auto';
+        popover.style.top = 'calc(100% + 10px)';
+      } else {
+        // 向上展开
+        popover.style.top = 'auto';
+        popover.style.bottom = 'calc(100% + 10px)';
       }
 
-      container.style.left = `${Math.round(safeLeft)}px`;
-      container.style.top = `${Math.round(safeTop)}px`;
-      container.style.right = 'auto';
-      container.style.bottom = 'auto';
+      // 2. 水平方向判断：胶囊在屏幕左半区则向右展开，右半区则向左展开
+      const spaceRight = window.innerWidth - containerRect.left;
+      const spaceLeft = containerRect.right;
+
+      if (spaceRight < popoverWidth + 16 && spaceLeft >= popoverWidth + 16) {
+        // 靠近右侧：右对齐胶囊向左展开
+        popover.style.left = 'auto';
+        popover.style.right = '0';
+      } else if (spaceLeft < popoverWidth + 16 && spaceRight >= popoverWidth + 16) {
+        // 靠近左侧：左对齐胶囊向右展开 (解决左下角只能显示很小一部分的问题)
+        popover.style.right = 'auto';
+        popover.style.left = '0';
+      } else if (spaceRight >= popoverWidth + 16) {
+        popover.style.right = 'auto';
+        popover.style.left = '0';
+      } else {
+        popover.style.left = 'auto';
+        popover.style.right = '0';
+      }
+
+      // 3. 印章弹层智能避让
+      if (stampPopover) {
+        if (containerRect.left < 280) {
+          stampPopover.style.left = '320px';
+          stampPopover.style.right = 'auto';
+        } else {
+          stampPopover.style.right = '320px';
+          stampPopover.style.left = 'auto';
+        }
+      }
     });
   }
 
-  restoreUserAnchorPosition() {
-    if (this.hasUserMoved && this.userAnchorLeft !== null && this.userAnchorTop !== null) {
-      const maxLeft = Math.max(8, window.innerWidth - 76);
-      const maxTop = Math.max(56, window.innerHeight - 56);
-      const safeLeft = Math.min(Math.max(8, this.userAnchorLeft), maxLeft);
-      const safeTop = Math.min(Math.max(56, this.userAnchorTop), maxTop);
-
-      this.container.style.left = `${Math.round(safeLeft)}px`;
-      this.container.style.top = `${Math.round(safeTop)}px`;
-      this.container.style.right = 'auto';
-      this.container.style.bottom = 'auto';
-    } else if (!this.hasUserMoved) {
-      this.container.style.left = '';
-      this.container.style.top = '';
-      this.container.style.right = '';
-      this.container.style.bottom = '';
-    }
-  }
 
   render() {
     const activeTool = appState.get('activePenTool') || 'fountain';
@@ -291,6 +299,7 @@ export class PenToolbox {
     let hasMoved = false;
 
     const onPointerDown = (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
       isDragging = true;
       hasMoved = false;
       startX = e.clientX;
@@ -305,7 +314,9 @@ export class PenToolbox {
       container.style.left = `${initialLeft}px`;
       container.style.top = `${initialTop}px`;
 
-      pillBtn.setPointerCapture(e.pointerId);
+      try {
+        pillBtn.setPointerCapture(e.pointerId);
+      } catch (err) {}
     };
 
     const onPointerMove = (e) => {
@@ -313,7 +324,7 @@ export class PenToolbox {
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
 
-      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         hasMoved = true;
         this.hasUserMoved = true;
       }
@@ -321,8 +332,11 @@ export class PenToolbox {
       let newLeft = initialLeft + dx;
       let newTop = initialTop + dy;
 
-      newLeft = Math.max(8, Math.min(newLeft, window.innerWidth - container.offsetWidth - 8));
-      newTop = Math.max(52, Math.min(newTop, window.innerHeight - container.offsetHeight - 8));
+      const pillWidth = pillBtn.offsetWidth || 84;
+      const pillHeight = pillBtn.offsetHeight || 38;
+
+      newLeft = Math.max(8, Math.min(newLeft, window.innerWidth - pillWidth - 8));
+      newTop = Math.max(50, Math.min(newTop, window.innerHeight - pillHeight - 8));
 
       container.style.left = `${newLeft}px`;
       container.style.top = `${newTop}px`;
@@ -336,10 +350,14 @@ export class PenToolbox {
     const onPointerUp = (e) => {
       if (!isDragging) return;
       isDragging = false;
-      pillBtn.releasePointerCapture(e.pointerId);
+      try {
+        pillBtn.releasePointerCapture(e.pointerId);
+      } catch (err) {}
 
       if (!hasMoved) {
         this.toggle();
+      } else if (this.isExpanded) {
+        this.adjustPopoverSmartPosition();
       }
     };
 

@@ -115,7 +115,7 @@ export class ScoreViewer {
         </div>
 
         <!-- 悬浮手写批注工具栏挂载点 -->
-        <div id="floatingPenContainer"></div>
+        <div id="floatingPenContainer" class="floating-pen-container"></div>
       </div>
     `;
 

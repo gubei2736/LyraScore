@@ -3,13 +3,15 @@
    ========================================================================== */
 
 /* 浮动手写笔工具箱外层容器 */
+#floatingPenContainer,
 .floating-pen-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 85;
+  z-index: 95;
   touch-action: none;
   user-select: none;
+  display: inline-block;
 }
 
 .pen-toolbox-wrapper {
