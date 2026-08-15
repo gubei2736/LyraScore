@@ -112,7 +112,8 @@ export class PenToolbox {
       this.restoreUserAnchorPosition();
     }
 
-    appState.set({ isPenActive: this.isExpanded });
+    // 手写批注模式始终保持激活，与面板展开/收起状态完全解耦
+    appState.set({ isPenActive: true });
     this.reader.syncPenToolToRenderers();
   }
 
