@@ -306,7 +306,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* 核心阅读视口 */
+/* 核心阅读视口 (全权由 JS 手势引擎接管缩放与翻页) */
 .score-viewport-container {
   flex: 1;
   width: 100%;
@@ -319,7 +319,7 @@
   align-items: flex-start;
   padding: 16px 0 80px 0;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y pinch-zoom;
+  touch-action: none;
 }
 
 /* 触控翻页微型热区 */

@@ -3,7 +3,7 @@
  * 具备：
  * 1. 极致半透明水晶毛玻璃悬浮胶囊
  * 2. 全屏自由拖拽任意移动位置
- * 3. 屏幕旋转与视口自适应边界钳位 (横竖屏切换100%始终在屏幕可见范围内)
+ * 3. 屏幕旋转相对比例记忆与自适应视口钳位 (用户拖到哪里，横竖屏旋转后依然保持相对原位，绝不强制归位右下角)
  * 4. 纯汉字操作按钮：撤销 / 回退 / 清空
  * 5. 接入现代高保真确认对话框
  */
@@ -19,7 +19,10 @@ export class PenToolbox {
     this.isExpanded = false;
     this.isStampPickerOpen = false;
 
-    // 记录用户拖拽锚定的原始坐标
+    // 记录用户是否手动拖拽过及相对屏幕比例 (Percent Coordinates)
+    this.hasUserMoved = false;
+    this.anchorRatioX = null;
+    this.anchorRatioY = null;
     this.userAnchorLeft = null;
     this.userAnchorTop = null;
 
@@ -44,25 +47,39 @@ export class PenToolbox {
 
   initOrientationWatcher() {
     window.addEventListener('resize', () => {
-      this.clampToViewport();
+      this.handleScreenResize();
     });
     window.addEventListener('orientationchange', () => {
-      setTimeout(() => this.clampToViewport(), 150);
+      setTimeout(() => this.handleScreenResize(), 150);
     });
   }
 
-  clampToViewport() {
+  handleScreenResize() {
+    // 若用户未手动移动过，保持 CSS 默认定位 (不强制改写坐标)
+    if (!this.hasUserMoved || this.anchorRatioX === null) {
+      if (!this.isExpanded) {
+        this.container.style.left = '';
+        this.container.style.top = '';
+        this.container.style.right = '';
+        this.container.style.bottom = '';
+      } else {
+        this.adjustPositionForExpandedPanel();
+      }
+      return;
+    }
+
+    // 用户曾手动移动：按照相对屏幕比例精准重定位
     const maxLeft = Math.max(8, window.innerWidth - (this.isExpanded ? 350 : 76));
     const maxTop = Math.max(56, window.innerHeight - (this.isExpanded ? 240 : 56));
 
-    let curLeft = this.userAnchorLeft !== null ? this.userAnchorLeft : (window.innerWidth - 90);
-    let curTop = this.userAnchorTop !== null ? this.userAnchorTop : (window.innerHeight - 100);
+    let newLeft = this.anchorRatioX * window.innerWidth;
+    let newTop = this.anchorRatioY * window.innerHeight;
 
-    curLeft = Math.min(Math.max(8, curLeft), maxLeft);
-    curTop = Math.min(Math.max(56, curTop), maxTop);
+    newLeft = Math.min(Math.max(8, newLeft), maxLeft);
+    newTop = Math.min(Math.max(56, newTop), maxTop);
 
-    this.userAnchorLeft = curLeft;
-    this.userAnchorTop = curTop;
+    this.userAnchorLeft = newLeft;
+    this.userAnchorTop = newTop;
 
     if (this.isExpanded) {
       this.adjustPositionForExpandedPanel();
@@ -130,7 +147,7 @@ export class PenToolbox {
   }
 
   restoreUserAnchorPosition() {
-    if (this.userAnchorLeft !== null && this.userAnchorTop !== null) {
+    if (this.hasUserMoved && this.userAnchorLeft !== null && this.userAnchorTop !== null) {
       const maxLeft = Math.max(8, window.innerWidth - 76);
       const maxTop = Math.max(56, window.innerHeight - 56);
       const safeLeft = Math.min(Math.max(8, this.userAnchorLeft), maxLeft);
@@ -140,6 +157,12 @@ export class PenToolbox {
       this.container.style.top = `${Math.round(safeTop)}px`;
       this.container.style.right = 'auto';
       this.container.style.bottom = 'auto';
+    } else if (!this.hasUserMoved) {
+      // 未移动过，清空内联样式回归 CSS 规则
+      this.container.style.left = '';
+      this.container.style.top = '';
+      this.container.style.right = '';
+      this.container.style.bottom = '';
     }
   }
 
@@ -270,8 +293,9 @@ export class PenToolbox {
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
 
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
         hasMoved = true;
+        this.hasUserMoved = true;
       }
 
       let newLeft = initialLeft + dx;
@@ -285,6 +309,8 @@ export class PenToolbox {
 
       this.userAnchorLeft = newLeft;
       this.userAnchorTop = newTop;
+      this.anchorRatioX = newLeft / window.innerWidth;
+      this.anchorRatioY = newTop / window.innerHeight;
     };
 
     const onPointerUp = (e) => {

@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、手势穿透、双指平滑 Pinch-to-Zoom 缩放与双向手势翻页引擎
+ * 具备防循环闪烁保护、手势穿透、高灵敏双指平滑 Pinch-to-Zoom 缩放与双向手势翻页引擎
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -24,7 +24,7 @@ export class ScoreReader {
     this.zoomScale = 1.0;
     this.lastRenderedWidth = 0;
     this.isRendering = false;
-    this.onZoomChange = null; // 回调通知外部 UI 实时同步缩放比
+    this.onZoomChange = null;
 
     this.initWindowResizeListener();
     this.initGesturesAndDampedFlip();
@@ -63,9 +63,9 @@ export class ScoreReader {
     if (!vp) return;
 
     vp.addEventListener('touchstart', (e) => {
-      if (appState.get('isPenActive')) return; // 手写笔绘制中不接管
+      if (appState.get('isPenActive')) return;
 
-      if (e.touches.length === 2) {
+      if (e.touches.length >= 2) {
         isMultiTouch = true;
         isSwiping = false;
         initialDistance = getDistance(e.touches[0], e.touches[1]);
@@ -77,31 +77,45 @@ export class ScoreReader {
       if (e.touches.length === 1) {
         isMultiTouch = false;
         isSwiping = true;
+        initialDistance = 0;
         startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
         currentX = startX;
         currentY = startY;
         this.container.style.transition = 'none';
       }
-    }, { passive: true });
+    }, { passive: false });
 
     vp.addEventListener('touchmove', (e) => {
       if (appState.get('isPenActive')) return;
 
-      // 1. 双指直接在屏幕上缩放乐谱 (Pinch-to-Zoom)
-      if (isMultiTouch && e.touches.length === 2 && initialDistance > 0) {
+      // 动态提升为双指缩放 (即使先触碰了一指，第二指落下时立即无缝切换)
+      if (e.touches.length >= 2) {
+        if (!isMultiTouch || initialDistance <= 0) {
+          isMultiTouch = true;
+          isSwiping = false;
+          initialDistance = getDistance(e.touches[0], e.touches[1]);
+          initialScale = this.zoomScale;
+          this.container.style.transition = 'none';
+          return;
+        }
+
+        e.preventDefault(); // 阻止原生页面滚动/原生缩放冲突
         const dist = getDistance(e.touches[0], e.touches[1]);
-        const scale = Math.min(Math.max(initialScale * (dist / initialDistance), 0.6), 2.6);
-        this.zoomScale = scale;
-        this.container.style.transform = `scale(${scale})`;
-        this.container.style.transformOrigin = 'top center';
-        if (this.onZoomChange) {
-          this.onZoomChange(this.zoomScale);
+        if (dist > 0 && initialDistance > 0) {
+          const factor = dist / initialDistance;
+          const scale = Math.min(Math.max(initialScale * factor, 0.5), 2.8);
+          this.zoomScale = scale;
+          this.container.style.transform = `scale(${scale})`;
+          this.container.style.transformOrigin = 'top center';
+          if (this.onZoomChange) {
+            this.onZoomChange(this.zoomScale);
+          }
         }
         return;
       }
 
-      // 2. 单指滑动手势带弹性阻尼
+      // 单指滑动手势带弹性阻尼
       if (isSwiping && e.touches.length === 1) {
         currentX = e.touches[0].clientX;
         currentY = e.touches[0].clientY;
@@ -120,20 +134,23 @@ export class ScoreReader {
           }
         }
       }
-    }, { passive: true });
+    }, { passive: false });
 
     vp.addEventListener('touchend', async (e) => {
       if (appState.get('isPenActive')) return;
 
-      if (isMultiTouch && e.touches.length < 2) {
-        isMultiTouch = false;
-        if (this.onZoomChange) {
-          this.onZoomChange(this.zoomScale);
+      if (isMultiTouch) {
+        if (e.touches.length < 2) {
+          isMultiTouch = false;
+          initialDistance = 0;
+          if (this.onZoomChange) {
+            this.onZoomChange(this.zoomScale);
+          }
         }
         return;
       }
 
-      if (isSwiping) {
+      if (isSwiping && e.touches.length === 0) {
         isSwiping = false;
         const deltaX = currentX - startX;
         const deltaY = currentY - startY;
@@ -189,7 +206,7 @@ export class ScoreReader {
   }
 
   setZoom(scale) {
-    this.zoomScale = Math.min(Math.max(scale, 0.6), 2.6);
+    this.zoomScale = Math.min(Math.max(scale, 0.5), 2.8);
     this.container.style.transform = `scale(${this.zoomScale})`;
     this.container.style.transformOrigin = 'top center';
     if (this.onZoomChange) {
