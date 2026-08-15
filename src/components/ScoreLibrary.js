@@ -137,26 +137,22 @@ export class ScoreLibrary {
   }
 
   bindEvents() {
-    // 导入按钮点击
     this.container.querySelector('#btnImportSidebar')?.addEventListener('click', () => {
       this.triggerFileImport();
     });
 
-    // 搜索
     const searchInput = this.container.querySelector('#scoreSearchInput');
     searchInput?.addEventListener('input', (e) => {
       this.searchQuery = e.target.value.trim().toLowerCase();
       this.renderScoreGrid();
     });
 
-    // 调式选择
     const keySelect = this.container.querySelector('#keyFilterSelect');
     keySelect?.addEventListener('change', (e) => {
       this.selectedKey = e.target.value || null;
       this.renderScoreGrid();
     });
 
-    // 格式过滤
     this.container.querySelectorAll('.filter-pill').forEach(btn => {
       btn.addEventListener('click', () => {
         this.selectedFormat = btn.dataset.format;
@@ -165,7 +161,6 @@ export class ScoreLibrary {
       });
     });
 
-    // 导航分类切换
     this.container.querySelector('#navAllScores')?.addEventListener('click', () => {
       this.onlyFavorites = false;
       this.selectedKey = null;
@@ -185,7 +180,6 @@ export class ScoreLibrary {
       this.renderScoreGrid();
     });
 
-    // 文件选择监听
     const fileInput = this.container.querySelector('#scoreFileInput');
     fileInput?.addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
@@ -195,7 +189,6 @@ export class ScoreLibrary {
       }
     });
 
-    // 拖拽上传
     const dropzone = this.container.querySelector('#dropzoneArea');
     const mainEl = this.container.querySelector('.library-main');
 
@@ -217,7 +210,6 @@ export class ScoreLibrary {
       }
     });
 
-    // 主题切换
     this.container.querySelectorAll('.theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const theme = btn.dataset.theme;
@@ -264,7 +256,6 @@ export class ScoreLibrary {
 
     if (!gridEl) return;
 
-    // 筛选乐谱
     const filtered = this.scores.filter(s => {
       if (this.onlyFavorites && !s.isFavorite) return false;
       if (this.selectedFormat !== 'all' && s.format !== this.selectedFormat) return false;
@@ -289,7 +280,7 @@ export class ScoreLibrary {
           </h3>
           <p style="color: var(--text-muted, #6b7280); max-width: 480px; margin: 0 auto 24px; line-height: 1.6;">
             ${this.scores.length === 0 
-              ? '点击下方按钮或从平板文件中选择并导入您的第一本乐谱（支持 PDF / MusicXML / 高清乐谱图片）。' 
+              ? '点击下方按钮从平板中选择并导入您的第一本乐谱（支持 PDF / MusicXML / 高清乐谱图片）。' 
               : '请尝试更换搜索词或清除筛选条件。'}
           </p>
           <button class="btn btn-primary btn-lg" id="btnEmptyStateImport" style="padding: 12px 28px; font-size: 16px; border-radius: 12px; cursor: pointer;">
@@ -321,10 +312,8 @@ export class ScoreLibrary {
               </div>
             `}
 
-            <!-- 格式徽标 -->
             <span class="badge-format badge-${s.format}">${formatBadge}</span>
 
-            <!-- 收藏按钮 -->
             <button class="favorite-star-btn ${s.isFavorite ? 'favorited' : ''}" data-action="toggle-fav" title="收藏">
               ${s.isFavorite ? '★' : '☆'}
             </button>
@@ -340,7 +329,6 @@ export class ScoreLibrary {
               </div>
             ` : ''}
 
-            <!-- 调式与标签 -->
             <div class="card-meta-row">
               ${keyLabel ? `<span class="meta-key-badge">${keyLabel}</span>` : ''}
               ${(s.tags || []).slice(0, 3).map(t => `
@@ -348,7 +336,6 @@ export class ScoreLibrary {
               `).join('')}
             </div>
 
-            <!-- 卡片操作动作条 -->
             <div class="card-actions">
               <button class="btn btn-sm btn-primary action-open-btn" data-action="open">
                 📖 开始阅读
@@ -368,13 +355,11 @@ export class ScoreLibrary {
       `;
     }).join('');
 
-    // 绑定卡片交互事件
     gridEl.querySelectorAll('.score-card').forEach(card => {
       const scoreId = card.dataset.scoreId;
       const score = this.scores.find(s => s.id === scoreId);
       if (!score) return;
 
-      // 打开阅读
       card.querySelector('[data-action="open"]')?.addEventListener('click', () => {
         this.onOpenScore(score);
       });
@@ -382,17 +367,14 @@ export class ScoreLibrary {
         this.onOpenScore(score);
       });
 
-      // 创建副本
       card.querySelector('[data-action="copy"]')?.addEventListener('click', () => {
         this.onCopyScore(score);
       });
 
-      // 编辑元数据
       card.querySelector('[data-action="edit"]')?.addEventListener('click', () => {
         this.onEditScore(score);
       });
 
-      // 收藏切换
       card.querySelector('[data-action="toggle-fav"]')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         score.isFavorite = !score.isFavorite;
@@ -400,7 +382,6 @@ export class ScoreLibrary {
         this.renderScoreGrid();
       });
 
-      // 删除
       card.querySelector('[data-action="delete"]')?.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (confirm(`确定要删除乐谱《${score.title}》吗？其所有手写笔迹也将被移除。`)) {
@@ -425,13 +406,18 @@ export class ScoreLibrary {
 
       if (ext === 'pdf') {
         format = 'pdf';
-        const arrayBuf = await file.arrayBuffer();
-        fileData = arrayBuf;
+        // 读取为持久化 DataURL，确保 IndexedDB 安全存储且跨端 100% 兼容
+        const reader = new FileReader();
+        const dataUrl = await new Promise((res) => {
+          reader.onload = () => res(reader.result);
+          reader.readAsDataURL(file);
+        });
+        fileData = dataUrl;
 
-        // 生成 PDF 缩略图
+        // 生成 PDF 缩略图与页数提取
         try {
           const pdfR = new PdfScoreRenderer();
-          const info = await pdfR.load(arrayBuf);
+          const info = await pdfR.load(dataUrl);
           pageCount = info.numPages;
           coverUrl = await pdfR.generateThumbnail(300);
           pdfR.destroy();

@@ -1,6 +1,7 @@
 /**
  * 手写笔专业浮动工具箱 (PenToolbox)
  * 适配平板大屏触控与笔尖操作，包含压感笔、荧光笔、音乐印章、橡皮擦、撤销重做与调色盘
+ * 支持完全收起与最小化至屏幕边缘，彻底避免遮挡乐谱
  */
 
 import { MUSICAL_STAMPS } from '../core/penEngine/stamps.js';
@@ -10,7 +11,7 @@ export class PenToolbox {
   constructor(containerElement, scoreReader) {
     this.container = containerElement;
     this.reader = scoreReader;
-    this.isExpanded = true;
+    this.isExpanded = false; // 默认收起为微型胶囊，给乐谱最大阅读空间
     this.isStampPickerOpen = false;
 
     this.colors = [
@@ -30,19 +31,50 @@ export class PenToolbox {
     });
   }
 
+  toggle(visible) {
+    if (typeof visible === 'boolean') {
+      this.isExpanded = visible;
+    } else {
+      this.isExpanded = !this.isExpanded;
+    }
+    const box = this.container.querySelector('.pen-toolbox');
+    if (box) {
+      box.classList.toggle('expanded', this.isExpanded);
+      box.classList.toggle('collapsed', !this.isExpanded);
+    }
+    appState.set({ isPenActive: this.isExpanded });
+    this.reader.syncPenToolToRenderers();
+  }
+
+  show() {
+    this.container.style.display = 'block';
+  }
+
+  hide() {
+    this.container.style.display = 'none';
+    appState.set({ isPenActive: false });
+    this.reader.syncPenToolToRenderers();
+  }
+
   render() {
     const activeTool = appState.get('activePenTool');
     const activeColor = appState.get('penColor');
-    const isPenActive = appState.get('isPenActive');
 
     this.container.innerHTML = `
       <div class="pen-toolbox ${this.isExpanded ? 'expanded' : 'collapsed'}">
-        <!-- 工具箱手柄 / 收起展开 -->
+        <!-- 工具箱手柄 / 收起展开悬浮微型胶囊 -->
         <button class="toolbox-toggle-btn" id="toolboxToggleBtn" title="展开/收起手写笔工具箱">
           <span class="tool-icon">🖊️</span>
+          <span class="pill-text">${this.isExpanded ? '收起批注' : '手写批注'}</span>
         </button>
 
         <div class="toolbox-content">
+          <!-- 顶部工具箱标题与收起按钮 -->
+          <div class="toolbox-header-row">
+            <span class="toolbox-title">✍️ 乐谱手写批注</span>
+            <button class="toolbox-minimize-btn" id="toolboxMinimizeBtn" title="最小化到边缘">✕</button>
+          </div>
+
           <!-- 笔刷工具选择区 -->
           <div class="tool-group">
             <button class="tool-btn ${activeTool === 'fountain' ? 'active' : ''}" data-tool="fountain" title="压感墨水笔 (带笔锋)">
@@ -82,21 +114,24 @@ export class PenToolbox {
 
           <div class="stroke-size-group">
             <span class="size-label">粗细</span>
-            <input type="range" class="size-slider" id="strokeSizeSlider" min="2" max="16" step="1" value="${appState.get('penSize')}">
+            <input type="range" class="size-slider" id="strokeSizeSlider" min="2" max="16" step="1" value="${appState.get('penSize') || 4}">
           </div>
 
           <div class="tool-divider"></div>
 
           <!-- 历史撤销与清屏 -->
           <div class="history-group">
-            <button class="action-btn" id="undoBtn" title="撤销笔迹 (Ctrl+Z / 双指双击)">
+            <button class="action-btn" id="undoBtn" title="撤销笔迹">
               <span class="tool-icon">↩️</span>
+              <span>撤销</span>
             </button>
-            <button class="action-btn" id="redoBtn" title="重做笔迹 (Ctrl+Y)">
+            <button class="action-btn" id="redoBtn" title="重做笔迹">
               <span class="tool-icon">↪️</span>
+              <span>重做</span>
             </button>
-            <button class="action-btn" id="clearBtn" title="清空本页全部笔迹">
+            <button class="action-btn btn-clear-danger" id="clearBtn" title="清空本页全部笔迹">
               <span class="tool-icon">🗑️</span>
+              <span>清空</span>
             </button>
           </div>
         </div>
@@ -121,11 +156,14 @@ export class PenToolbox {
   }
 
   bindEvents() {
-    // 展开/收起
+    // 展开/收起手柄
     this.container.querySelector('#toolboxToggleBtn')?.addEventListener('click', () => {
-      this.isExpanded = !this.isExpanded;
-      this.container.querySelector('.pen-toolbox')?.classList.toggle('expanded', this.isExpanded);
-      this.container.querySelector('.pen-toolbox')?.classList.toggle('collapsed', !this.isExpanded);
+      this.toggle();
+    });
+
+    // 最小化按钮
+    this.container.querySelector('#toolboxMinimizeBtn')?.addEventListener('click', () => {
+      this.toggle(false);
     });
 
     // 笔刷切换
@@ -211,5 +249,10 @@ export class PenToolbox {
     this.container.querySelectorAll('.color-dot').forEach(dot => {
       dot.classList.toggle('active', dot.dataset.color === activeColor);
     });
+
+    const toggleBtnText = this.container.querySelector('.pill-text');
+    if (toggleBtnText) {
+      toggleBtnText.textContent = this.isExpanded ? '收起批注' : '手写批注';
+    }
   }
 }

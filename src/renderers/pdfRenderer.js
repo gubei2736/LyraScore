@@ -1,9 +1,14 @@
 /**
  * PDF 乐谱渲染引擎 (基于 Mozilla PDF.js)
- * 支持多页高清渲染、平板视网膜 DPR 自适应缩放，完全离线运行
+ * 具备强壮的离线兼容性、多数据格式容错与高清 DPR 自适应
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+
+// 禁用外部 Worker 网络请求，使用稳定可靠的主线程内联解析
+if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+}
 
 export class PdfScoreRenderer {
   constructor() {
@@ -13,11 +18,21 @@ export class PdfScoreRenderer {
 
   async load(fileData) {
     this.pageCache.clear();
-    let data = fileData;
+    if (!fileData) {
+      throw new Error('未提供有效的 PDF 文件数据');
+    }
+
+    let pdfData = null;
+
     if (fileData instanceof Blob) {
-      data = await fileData.arrayBuffer();
+      const buffer = await fileData.arrayBuffer();
+      pdfData = new Uint8Array(buffer);
+    } else if (fileData instanceof ArrayBuffer) {
+      // 复制一份副本以防止 Detached ArrayBuffer 异常
+      pdfData = new Uint8Array(fileData.slice(0));
+    } else if (fileData instanceof Uint8Array) {
+      pdfData = new Uint8Array(fileData.buffer.slice(0));
     } else if (typeof fileData === 'string' && fileData.startsWith('data:')) {
-      // DataURL 转 Uint8Array
       const base64 = fileData.split(',')[1];
       const binaryStr = atob(base64);
       const len = binaryStr.length;
@@ -25,12 +40,15 @@ export class PdfScoreRenderer {
       for (let i = 0; i < len; i++) {
         bytes[i] = binaryStr.charCodeAt(i);
       }
-      data = bytes.buffer;
+      pdfData = bytes;
+    } else {
+      throw new Error('未知的 PDF 数据格式');
     }
 
     try {
       const loadingTask = pdfjsLib.getDocument({
-        data: data,
+        data: pdfData,
+        cMapPacked: true,
         verbosity: 0,
         stopAtErrors: false
       });
@@ -41,7 +59,7 @@ export class PdfScoreRenderer {
       };
     } catch (err) {
       console.error('PDF 解析失败:', err);
-      throw new Error('PDF 乐谱文件解析失败，请检查文件是否损坏');
+      throw new Error('PDF 乐谱文件解析失败: ' + (err.message || err));
     }
   }
 
@@ -58,36 +76,45 @@ export class PdfScoreRenderer {
   async renderPage(pageNum, canvas, containerWidth = 800) {
     if (!this.pdfDoc || pageNum < 1 || pageNum > this.pdfDoc.numPages) return null;
 
-    const page = await this.pdfDoc.getPage(pageNum);
-    const unscaledViewport = page.getViewport({ scale: 1.0 });
+    try {
+      const page = await this.pdfDoc.getPage(pageNum);
+      const unscaledViewport = page.getViewport({ scale: 1.0 });
 
-    // 计算缩放比例适应容器宽度
-    const baseScale = containerWidth / unscaledViewport.width;
-    const dpr = Math.min(window.devicePixelRatio || 2.0, 2.5); // 限制最大 2.5 倍以保障大图性能
-    const renderScale = baseScale * dpr;
+      // 计算安全视口宽度（保证不为 0 或 NaN）
+      const safeContainerWidth = Math.max(containerWidth || 800, 320);
+      const baseScale = safeContainerWidth / (unscaledViewport.width || 595);
+      const dpr = Math.min(window.devicePixelRatio || 2.0, 2.5);
+      const renderScale = Math.max(baseScale * dpr, 0.5);
 
-    const viewport = page.getViewport({ scale: renderScale });
-    const ctx = canvas.getContext('2d', { alpha: false });
+      const viewport = page.getViewport({ scale: renderScale });
+      const ctx = canvas.getContext('2d', { alpha: false });
 
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    canvas.style.width = `${viewport.width / dpr}px`;
-    canvas.style.height = `${viewport.height / dpr}px`;
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      const displayWidth = Math.floor(viewport.width / dpr);
+      const displayHeight = Math.floor(viewport.height / dpr);
 
-    const renderContext = {
-      canvasContext: ctx,
-      viewport: viewport,
-      background: '#ffffff'
-    };
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
 
-    await page.render(renderContext).promise;
+      const renderContext = {
+        canvasContext: ctx,
+        viewport: viewport,
+        background: '#ffffff'
+      };
 
-    return {
-      width: viewport.width / dpr,
-      height: viewport.height / dpr,
-      rawWidth: viewport.width,
-      rawHeight: viewport.height
-    };
+      await page.render(renderContext).promise;
+
+      return {
+        width: displayWidth,
+        height: displayHeight,
+        rawWidth: viewport.width,
+        rawHeight: viewport.height
+      };
+    } catch (err) {
+      console.error(`渲染 PDF 第 ${pageNum} 页失败:`, err);
+      return null;
+    }
   }
 
   /**
@@ -95,9 +122,14 @@ export class PdfScoreRenderer {
    */
   async generateThumbnail(maxWidth = 300) {
     if (!this.pdfDoc) return null;
-    const canvas = document.createElement('canvas');
-    await this.renderPage(1, canvas, maxWidth);
-    return canvas.toDataURL('image/jpeg', 0.85);
+    try {
+      const canvas = document.createElement('canvas');
+      await this.renderPage(1, canvas, maxWidth);
+      return canvas.toDataURL('image/jpeg', 0.85);
+    } catch (e) {
+      console.warn('生成缩略图失败:', e);
+      return null;
+    }
   }
 
   destroy() {

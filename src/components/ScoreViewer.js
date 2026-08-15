@@ -1,6 +1,7 @@
 /**
  * 乐谱阅读与演奏主视图 (ScoreViewer Component)
  * 包含沉浸式视口、顶部演奏控制条、单/双页排版切换、手写笔工具箱与翻谱悬浮条
+ * 具备双向畅快进出演奏模式、手写笔工具箱折叠隐藏等全套交互
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -22,6 +23,7 @@ export class ScoreViewer {
     this.autoFlip = null;
     this.penToolbox = null;
     this.flipBar = null;
+    this.isStageMode = false;
 
     this.render();
     this.initReader();
@@ -39,7 +41,7 @@ export class ScoreViewer {
           <div class="topbar-left">
             <button class="btn btn-ghost topbar-back-btn" id="readerBackBtn" title="返回乐谱库">
               <span class="btn-icon">◀</span>
-              <span>乐谱书架</span>
+              <span>书架</span>
             </button>
             <div class="score-title-meta">
               <h2 class="viewer-score-title" id="viewerScoreTitle">乐谱加载中...</h2>
@@ -50,13 +52,18 @@ export class ScoreViewer {
           <div class="topbar-center">
             <!-- 页面切换与页码显示 -->
             <div class="page-nav-controls">
-              <button class="nav-arrow-btn" id="prevPageBtn" title="上一页 (PageUp / 左踏板)">◀</button>
+              <button class="nav-arrow-btn" id="prevPageBtn" title="上一页 (左踏板/PageUp)">◀</button>
               <span class="page-indicator" id="pageIndicator">1 / 1</span>
-              <button class="nav-arrow-btn" id="nextPageBtn" title="下一页 (PageDown / 空格 / 右踏板)">▶</button>
+              <button class="nav-arrow-btn" id="nextPageBtn" title="下一页 (右踏板/PageDown)">▶</button>
             </div>
           </div>
 
           <div class="topbar-right">
+            <!-- 手写批注开关 (可折叠隐藏) -->
+            <button class="btn btn-ghost btn-sm" id="togglePenToolboxBtn" title="显示/隐藏手写批注工具箱">
+              🖊️ 批注
+            </button>
+
             <!-- 排版模式切换 -->
             <div class="layout-toggle-group">
               <button class="icon-toggle-btn active" data-layout="single" title="单页模式 (适合竖屏平板)">📄</button>
@@ -80,6 +87,11 @@ export class ScoreViewer {
             </button>
           </div>
         </header>
+
+        <!-- 演奏模式下常驻的微型半透明退出胶囊按钮 -->
+        <button class="floating-stage-exit-pill" id="floatingExitStageBtn" style="display: none;" title="点击退出演奏模式">
+          ✕ 退出演奏
+        </button>
 
         <!-- 核心乐谱阅读视口 -->
         <main class="score-viewport-container" id="scoreViewport">
@@ -119,9 +131,28 @@ export class ScoreViewer {
     this.flipBar = new FlipBar(flipContainer, this.autoFlip);
   }
 
+  setStageMode(active) {
+    this.isStageMode = active;
+    const topbar = this.container.querySelector('#readerTopbar');
+    const exitBtn = this.container.querySelector('#floatingExitStageBtn');
+    const penContainer = this.container.querySelector('#floatingPenContainer');
+
+    if (active) {
+      topbar?.classList.add('hidden-bar');
+      if (exitBtn) exitBtn.style.display = 'flex';
+      if (penContainer) penContainer.style.display = 'none'; // 演奏模式下自动隐藏批注工具栏
+      wakeLockManager.request();
+    } else {
+      topbar?.classList.remove('hidden-bar');
+      if (exitBtn) exitBtn.style.display = 'none';
+      if (penContainer) penContainer.style.display = 'block';
+    }
+  }
+
   bindEvents() {
     // 返回书架
     this.container.querySelector('#readerBackBtn')?.addEventListener('click', () => {
+      this.setStageMode(false);
       this.autoFlip.pause();
       wakeLockManager.release();
       this.onBackToLibrary();
@@ -143,9 +174,16 @@ export class ScoreViewer {
       this.reader.nextPage();
     });
     this.container.querySelector('#hotzoneCenter')?.addEventListener('click', () => {
-      // 点击中央切换顶部工具栏显隐
-      const topbar = this.container.querySelector('#readerTopbar');
-      topbar?.classList.toggle('hidden-bar');
+      if (this.isStageMode) {
+        // 在演奏模式下点击中央呼出/隐藏顶部栏
+        const topbar = this.container.querySelector('#readerTopbar');
+        topbar?.classList.toggle('hidden-bar');
+      }
+    });
+
+    // 手写批注一键开关
+    this.container.querySelector('#togglePenToolboxBtn')?.addEventListener('click', () => {
+      this.penToolbox.toggle();
     });
 
     // 排版模式切换
@@ -174,24 +212,31 @@ export class ScoreViewer {
       appState.set({ theme: next });
     });
 
-    // 舞台沉浸演奏模式 (全屏 + 隐藏栏 + 防息屏)
-    this.container.querySelector('#stageModeBtn')?.addEventListener('click', async () => {
-      const topbar = this.container.querySelector('#readerTopbar');
-      topbar?.classList.add('hidden-bar');
+    // 进入舞台演奏模式
+    this.container.querySelector('#stageModeBtn')?.addEventListener('click', () => {
+      this.setStageMode(true);
+    });
 
-      // 请求全屏
-      try {
-        if (!document.fullscreenElement) {
-          await document.documentElement.requestFullscreen();
-        }
-      } catch (_) {}
+    // 退出演奏模式
+    this.container.querySelector('#floatingExitStageBtn')?.addEventListener('click', () => {
+      this.setStageMode(false);
+    });
 
-      // 开启防息屏
-      await wakeLockManager.request();
+    // 键盘快捷键监听 (Escape 退出演奏, 空格/箭头翻页)
+    window.addEventListener('keydown', (e) => {
+      if (appState.get('currentView') !== 'reader') return;
+      if (e.key === 'Escape' && this.isStageMode) {
+        this.setStageMode(false);
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        this.reader.nextPage();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        this.reader.prevPage();
+      }
     });
   }
 
   async openScore(score) {
+    this.setStageMode(false);
     const titleEl = this.container.querySelector('#viewerScoreTitle');
     const badgesRow = this.container.querySelector('#viewerBadgesRow');
 
@@ -207,7 +252,6 @@ export class ScoreViewer {
       `;
     }
 
-    // 默认横屏平板切换为双页模式，竖屏单页模式
     const isLandscape = window.innerWidth > window.innerHeight;
     if (isLandscape && score.format !== 'xml') {
       this.reader.setLayoutMode('double');
@@ -221,7 +265,23 @@ export class ScoreViewer {
       });
     }
 
-    await this.reader.loadScore(score);
+    try {
+      await this.reader.loadScore(score);
+    } catch (err) {
+      console.error('加载乐谱失败:', err);
+      const stageEl = this.container.querySelector('#scorePagesStage');
+      if (stageEl) {
+        stageEl.innerHTML = `
+          <div style="padding: 60px 20px; text-align: center; color: #dc2626;">
+            <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+            <h3>乐谱加载失败</h3>
+            <p style="color: #6b7280; margin: 12px 0;">${err.message || '文件可能损坏或格式不兼容'}</p>
+            <button onclick="location.reload()" class="btn btn-primary btn-sm">重新加载</button>
+          </div>
+        `;
+      }
+    }
+
     await wakeLockManager.request();
   }
 

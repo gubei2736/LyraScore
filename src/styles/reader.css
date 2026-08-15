@@ -117,6 +117,33 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* 演奏模式悬浮退出胶囊按钮 (半透明防误触) */
+.floating-stage-exit-pill {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  background: rgba(17, 24, 39, 0.75);
+  color: #ffffff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+}
+.floating-stage-exit-pill:hover {
+  background: rgba(17, 24, 39, 0.95);
+  transform: scale(1.05);
+}
+
 /* 核心阅读视口 */
 .score-viewport-container {
   flex: 1;
