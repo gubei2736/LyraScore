@@ -40,16 +40,17 @@ class LyraScoreApp {
   }
 
   setupBackNavigation() {
-    // 拦截 Android 系统侧滑返回与物理返回键
+    // 拦截 Android 系统侧滑返回与物理返回键 (全局暴露给 Java evaluateJavascript)
     window.onAndroidBackPressed = () => {
-      if (appState.get('currentView') === 'reader') {
+      const currentView = appState.get('currentView');
+      if (currentView === 'reader') {
         this.showLibrary();
-        return true;
+        return true; // 拦截成功，不退回桌面
       }
-      return false;
+      return false; // 当前在书架主页，放行系统返回桌面
     };
 
-    window.addEventListener('popstate', (e) => {
+    window.addEventListener('popstate', () => {
       if (appState.get('currentView') === 'reader') {
         this.showLibrary();
       }
@@ -90,6 +91,9 @@ class LyraScoreApp {
         onCopyScore: (score) => this.modal.open(score, true)
       });
 
+      // 暴露给全局以便原生端或调试调用
+      window.lyraApp = this;
+
     } catch (err) {
       console.error('初始化应用失败:', err);
       if (this.appEl) {
@@ -105,11 +109,15 @@ class LyraScoreApp {
   }
 
   async openScoreReader(score) {
-    this.libraryContainer.classList.remove('active');
-    this.libraryContainer.classList.add('hidden');
+    if (this.libraryContainer) {
+      this.libraryContainer.classList.remove('active');
+      this.libraryContainer.classList.add('hidden');
+    }
 
-    this.viewerContainer.classList.remove('hidden');
-    this.viewerContainer.classList.add('active');
+    if (this.viewerContainer) {
+      this.viewerContainer.classList.remove('hidden');
+      this.viewerContainer.classList.add('active');
+    }
 
     appState.set({ currentView: 'reader' });
     try {
@@ -120,18 +128,28 @@ class LyraScoreApp {
   }
 
   showLibrary() {
-    if (this.viewer) {
-      this.viewer.closeViewer();
+    try {
+      if (this.viewer && typeof this.viewer.closeViewer === 'function') {
+        this.viewer.closeViewer();
+      }
+    } catch (e) {
+      console.warn('关闭阅读器发生微小异常:', e);
     }
 
-    this.viewerContainer.classList.remove('active');
-    this.viewerContainer.classList.add('hidden');
+    if (this.viewerContainer) {
+      this.viewerContainer.classList.remove('active');
+      this.viewerContainer.classList.add('hidden');
+    }
 
-    this.libraryContainer.classList.remove('hidden');
-    this.libraryContainer.classList.add('active');
+    if (this.libraryContainer) {
+      this.libraryContainer.classList.remove('hidden');
+      this.libraryContainer.classList.add('active');
+    }
 
     appState.set({ currentView: 'library' });
-    this.library.loadScores();
+    if (this.library && typeof this.library.loadScores === 'function') {
+      this.library.loadScores();
+    }
   }
 }
 

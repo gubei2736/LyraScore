@@ -98,23 +98,24 @@ export class ScoreViewer {
         </header>
 
         <!-- 专注模式下常驻的微型半透明退出胶囊按钮 -->
-        <button class="floating-stage-exit-pill" id="floatingExitStageBtn" style="display: none;" title="点击退出专注模式">
-          ✕ 退出专注
+        <button class="floating-stage-exit-pill" id="floatingExitStageBtn" style="display: none;">
+          <span>✕</span> 退出专注
         </button>
 
-        <!-- 核心乐谱阅读视口 (支持双指平滑缩放与手势上下/左右阻尼滑动翻页) -->
-        <main class="score-viewport-container" id="scoreViewport">
-          <!-- 左右触控翻页微型热区 -->
-          <div class="touch-hotzone hotzone-left" id="hotzoneLeft" title="上一页"></div>
-          <div class="touch-hotzone hotzone-center" id="hotzoneCenter" title="唤出/隐藏工具栏"></div>
-          <div class="touch-hotzone hotzone-right" id="hotzoneRight" title="下一页"></div>
+        <!-- 核心乐谱视口与触控热区 -->
+        <div class="score-viewport-container" id="scoreViewport">
+          <!-- 左右隐形翻页热区 -->
+          <div class="touch-hotzone hotzone-left" id="hotzoneLeft" title="点击上一页"></div>
+          <div class="touch-hotzone hotzone-right" id="hotzoneRight" title="点击下一页"></div>
+          <!-- 顶部中间热区 (专注模式下轻触可唤出顶部栏) -->
+          <div class="touch-hotzone hotzone-center" id="hotzoneCenter" title="点击呼出/隐藏顶部控制条"></div>
 
-          <!-- 乐谱页面承载区域 -->
+          <!-- 乐谱页面排版舞台 -->
           <div class="score-pages-stage" id="scorePagesStage"></div>
-        </main>
+        </div>
 
-        <!-- 浮动手写笔工具箱容器 (半透明自由拖拽移动 + 智能边缘避让 + 原始位置精准还原) -->
-        <div class="floating-pen-container" id="floatingPenContainer"></div>
+        <!-- 悬浮手写批注工具栏挂载点 -->
+        <div id="floatingPenContainer"></div>
       </div>
     `;
 
@@ -181,10 +182,11 @@ export class ScoreViewer {
   }
 
   bindEvents() {
-    this.container.querySelector('#readerBackBtn')?.addEventListener('click', () => {
-      this.exitStageMode();
-      this.autoFlip?.stop();
-      this.metronome?.destroy();
+    // 返回书架主页
+    this.container.querySelector('#readerBackBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.closeViewer();
       this.onBackToLibrary();
     });
 
@@ -208,45 +210,49 @@ export class ScoreViewer {
       }
     });
 
-    // 触控滑动条缩放
-    const slider = this.container.querySelector('#zoomRangeSlider');
-    slider?.addEventListener('input', (e) => {
-      const pct = parseInt(e.target.value, 10);
-      const scale = pct / 100;
-      this.currentZoom = scale;
-      this.reader?.setZoom(scale);
+    // 触控缩放条滑动
+    const zoomSlider = this.container.querySelector('#zoomRangeSlider');
+    zoomSlider?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      this.currentZoom = val / 100;
+      this.reader?.setZoom(this.currentZoom);
       this.updateZoomLabel();
     });
 
-    // 点击百分比一键复位 100%
+    // 点击 100% 标签一键复位
     this.container.querySelector('#zoomLabel')?.addEventListener('click', () => {
       this.currentZoom = 1.0;
       this.reader?.setZoom(1.0);
+      const slider = this.container.querySelector('#zoomRangeSlider');
       if (slider) slider.value = 100;
       this.updateZoomLabel();
     });
 
+    // 单/双页排版切换
     this.container.querySelectorAll('.layout-toggle-group button').forEach(btn => {
       btn.addEventListener('click', () => {
         if (btn.classList.contains('disabled-btn')) return;
-        const mode = btn.dataset.layout;
-        this.reader?.setLayoutMode(mode);
-        this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
-          b.classList.toggle('active', b === btn);
-        });
+        const layout = btn.dataset.layout;
+        this.container.querySelectorAll('.layout-toggle-group button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.reader?.setLayoutMode(layout);
       });
     });
 
+    // 主题轮转 (纯汉字)
     this.container.querySelector('#themeCycleBtn')?.addEventListener('click', () => {
       const themes = ['parchment', 'dark', 'light'];
-      const current = appState.get('theme');
-      const nextIndex = (themes.indexOf(current) + 1) % themes.length;
-      appState.set({ theme: themes[nextIndex] });
+      const cur = document.documentElement.getAttribute('data-theme') || 'parchment';
+      const next = themes[(themes.indexOf(cur) + 1) % themes.length];
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('lyra_theme', next);
     });
 
+    // 专注模式
     this.container.querySelector('#stageModeBtn')?.addEventListener('click', () => {
       this.enterStageMode();
     });
+
     this.container.querySelector('#floatingExitStageBtn')?.addEventListener('click', () => {
       this.exitStageMode();
     });
@@ -349,6 +355,19 @@ export class ScoreViewer {
     const topbar = this.container.querySelector('#readerTopbar');
     if (topbar) {
       topbar.classList.toggle('hidden-bar');
+    }
+  }
+
+  /**
+   * 安全关闭阅读器并释放资源
+   */
+  closeViewer() {
+    try {
+      this.exitStageMode();
+      this.autoFlip?.stop();
+      this.metronome?.destroy();
+    } catch (err) {
+      console.warn('关闭阅读器资源时异常:', err);
     }
   }
 

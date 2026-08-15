@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
-import android.webkit.ConsoleMessage;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -19,9 +18,14 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 
+/**
+ * LyraScore 现代化平板原生宿主 Activity
+ * 具备沉浸式常亮视奏、原生文件导入选择器、多点触控放通与系统侧滑返回智能拦截
+ */
 public class MainActivity extends Activity {
-
     private static final String TAG = "LyraScore";
     private static final int FILE_CHOOSER_REQUEST_CODE = 1001;
 
@@ -60,39 +64,34 @@ public class MainActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // 4. 支持 Android 13/14/15/16 预测性返回手势与侧滑拦截
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                new OnBackInvokedCallback() {
+                    @Override
+                    public void onBackInvoked() {
+                        handleBackAction();
+                    }
+                }
+            );
         }
 
-        // 4. 开启远程调试
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            WebView.setWebContentsDebuggingEnabled(true);
-        }
-
-        // 5. 挂载 WebChromeClient：捕获 Console 日志 + 深度支持文件导入选择器
+        // 5. 原生系统文件导入选择器通道 (PDF / MusicXML / 图片)
         webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public boolean onConsoleMessage(ConsoleMessage cm) {
-                Log.d(TAG, "[JS Console " + cm.messageLevel() + "] " + cm.message() +
-                        " -- From line " + cm.lineNumber() + " of " + cm.sourceId());
-                return true;
-            }
-
-            // Android 5.0+ 现代标准文件选择器处理
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (mFilePathCallback != null) {
-                  mFilePathCallback.onReceiveValue(null);
-                  mFilePathCallback = null;
+                    mFilePathCallback.onReceiveValue(null);
                 }
                 mFilePathCallback = filePathCallback;
 
                 Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("*/*");
-                String[] mimeTypes = new String[]{
+
+                String[] mimeTypes = {
                         "application/pdf",
                         "text/xml",
                         "application/xml",
@@ -180,23 +179,28 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * 拦截系统侧滑手势与返回键：
+     * 统一处理系统侧滑返回与物理返回键：
      * 若处于乐谱阅读界面，侧滑返回书架主页；若在主页，返回桌面
      */
-    @Override
-    public void onBackPressed() {
+    private void handleBackAction() {
         if (webView != null) {
             webView.evaluateJavascript("(function(){ if (window.onAndroidBackPressed) { return window.onAndroidBackPressed(); } return false; })()", new ValueCallback<String>() {
                 @Override
                 public void onReceiveValue(String value) {
                     if ("true".equals(value) || "\"true\"".equals(value)) {
+                        // 成功返回书架主页
                         return;
                     }
-                    MainActivity.super.onBackPressed();
+                    finish();
                 }
             });
             return;
         }
-        super.onBackPressed();
+        finish();
+    }
+
+    @Override
+    public void onBackPressed() {
+        handleBackAction();
     }
 }
