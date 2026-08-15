@@ -1,6 +1,6 @@
 # 🎼 LyraScore (天琴乐谱)
 
-> **专业级平板乐谱阅读与手写批注工作站 (Professional Tablet Sheet Music Workstation)**  
+> 平板乐谱阅读与手写批注工作站 (Professional Tablet Sheet Music Workstation)**  
 > 专为平板大屏演奏、视奏练琴与舞台演出深度打造。融合**古典艺术美学**与**现代高性能工程**，兼具 **120Hz 满帧丝滑**、**0ms 瞬时翻页** 与 **绿色超低功耗**。
 
 ---
@@ -158,21 +158,3 @@ powershell -ExecutionPolicy Bypass -File "G:\Project\android\build_apk.ps1"
 ```
 构建成功后，将在 `G:\Project\android\LyraScore.apk` 生成已通过 v1/v2/v3 签名的标准 APK。
 
-### 3. 一键安装到平板设备
-```powershell
-adb install -r "G:\Project\android\LyraScore.apk"
-```
-
----
-
-## 📜 关键版本演进记录 (Changelog Highlights)
-
-- **`Commit 43e7231`**: 横竖屏切换丝滑化改造（0ms 即时几何缩放过渡 + 60ms 后台离屏重绘 + 180ms 硬件级 Cross-Fade 交叉淡入，彻底杜绝白屏闪烁）；
-- **`Commit 17c1488`**: 落地高性能低功耗协同体系（`requestIdleCallback` 离屏预光栅化 0ms 翻页、GPU 动态合成纹理加速、Android 原生 GPU 硬件直通）；
-- **`Commit cf2d26a`**: 竖屏模式排版优化（隐藏长滑动条仅保留 `100%` 复位徽标，一行流式紧凑排布）；
-- **`Commit 191bf2c`**: 升级自动翻页模式为高辨识度选择卡片组（带图标/说明/勾选徽标/选中边框），顶部胶囊实时同步展示当前模式；
-- **`Commit b7a388c`**: 节拍器支持自由自定义重拍点阵与顶部工具栏全景闪烁，自动翻页支持精确手动输入单页停留时长；
-- **`Commit 0d7fed0`**: 顶部工具栏挂载内置高精度专业节拍器（Web Audio 硬件时钟调度核心）；
-- **`Commit 93bed65 / 4b2b50d`**: 重构防误触引擎，彻底放行触控手势，实现 120Hz 双指捕获缩放与多指手势；
-- **`Commit 0229a84`**: 手写批注面板引入相对屏幕百分比坐标记忆机制，彻底解决横竖屏旋转跑位问题；
-- **`Commit 81935e3`**: 全面应用专属高保真天琴乐谱应用图标（覆盖 mdpi ~ xxxhdpi 全分辨率）。
