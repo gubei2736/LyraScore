@@ -1,9 +1,9 @@
 /**
  * 手写笔专业浮动工具箱 (PenToolbox)
- * 适配平板大屏触控，手写批注胶囊按钮具备：
- * 1. 半透明防遮挡毛玻璃质感
- * 2. 支持全屏自由拖拽任意移动位置 (Draggable Floating Pill)
- * 3. 区分拖拽与轻触点击展开
+ * 具备：
+ * 1. 极致半透明水晶毛玻璃悬浮胶囊
+ * 2. 全屏自由拖拽任意移动位置
+ * 3. 智能视口边界避让算法 (Smart Viewport Collision Avoidance)：无论停在任何边缘，展开面板 100% 完整可见
  */
 
 import { MUSICAL_STAMPS } from '../core/penEngine/stamps.js';
@@ -40,13 +40,54 @@ export class PenToolbox {
     } else {
       this.isExpanded = !this.isExpanded;
     }
+
     const box = this.container.querySelector('.pen-toolbox');
     if (box) {
       box.classList.toggle('expanded', this.isExpanded);
       box.classList.toggle('collapsed', !this.isExpanded);
     }
+
+    // 智能视口边界避让：展开时确保面板完整容纳在屏幕中
+    if (this.isExpanded) {
+      this.adjustPositionForExpandedPanel();
+    }
+
     appState.set({ isPenActive: this.isExpanded });
     this.reader.syncPenToolToRenderers();
+  }
+
+  adjustPositionForExpandedPanel() {
+    requestAnimationFrame(() => {
+      const container = this.container;
+      const rect = container.getBoundingClientRect();
+      const panelWidth = 340;
+      const panelHeight = 230;
+
+      let newLeft = rect.left;
+      let newTop = rect.top;
+
+      // 右边缘溢出检测
+      if (newLeft + panelWidth > window.innerWidth - 12) {
+        newLeft = window.innerWidth - panelWidth - 12;
+      }
+      // 左边缘溢出检测
+      if (newLeft < 12) {
+        newLeft = 12;
+      }
+      // 下边缘溢出检测
+      if (newTop + panelHeight > window.innerHeight - 12) {
+        newTop = window.innerHeight - panelHeight - 12;
+      }
+      // 上边缘溢出检测 (留出顶部工具栏高度)
+      if (newTop < 56) {
+        newTop = 56;
+      }
+
+      container.style.left = `${Math.round(newLeft)}px`;
+      container.style.top = `${Math.round(newTop)}px`;
+      container.style.right = 'auto';
+      container.style.bottom = 'auto';
+    });
   }
 
   render() {
@@ -55,10 +96,10 @@ export class PenToolbox {
 
     this.container.innerHTML = `
       <div class="pen-toolbox ${this.isExpanded ? 'expanded' : 'collapsed'}" id="penToolboxWidget">
-        <!-- 半透明可移动手柄胶囊 -->
+        <!-- 极致半透明可移动手柄胶囊 -->
         <button class="toolbox-toggle-btn draggable-pill" id="toolboxToggleBtn" title="按住可拖动位置，轻触展开批注">
           <span class="tool-icon">🖊️</span>
-          <span class="pill-text">${this.isExpanded ? '收起批注' : '手写批注'}</span>
+          <span class="pill-text">${this.isExpanded ? '收起' : '批注'}</span>
         </button>
 
         <div class="toolbox-content">
@@ -166,7 +207,6 @@ export class PenToolbox {
       initialLeft = rect.left;
       initialTop = rect.top;
 
-      // 切换为 fixed 绝对像素定位
       container.style.bottom = 'auto';
       container.style.right = 'auto';
       container.style.left = `${initialLeft}px`;
@@ -187,9 +227,8 @@ export class PenToolbox {
       let newLeft = initialLeft + dx;
       let newTop = initialTop + dy;
 
-      // 限制在屏幕可视范围内
-      newLeft = Math.max(10, Math.min(newLeft, window.innerWidth - container.offsetWidth - 10));
-      newTop = Math.max(60, Math.min(newTop, window.innerHeight - container.offsetHeight - 10));
+      newLeft = Math.max(8, Math.min(newLeft, window.innerWidth - container.offsetWidth - 8));
+      newTop = Math.max(52, Math.min(newTop, window.innerHeight - container.offsetHeight - 8));
 
       container.style.left = `${newLeft}px`;
       container.style.top = `${newTop}px`;
@@ -200,7 +239,6 @@ export class PenToolbox {
       isDragging = false;
       pillBtn.releasePointerCapture(e.pointerId);
 
-      // 如果只是轻点而不是拖拽，触发切换展开
       if (!hasMoved) {
         this.toggle();
       }
@@ -298,7 +336,7 @@ export class PenToolbox {
 
     const toggleBtnText = this.container.querySelector('.pill-text');
     if (toggleBtnText) {
-      toggleBtnText.textContent = this.isExpanded ? '收起批注' : '手写批注';
+      toggleBtnText.textContent = this.isExpanded ? '收起' : '批注';
     }
   }
 }

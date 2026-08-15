@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读与专注模式主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部控制条（内嵌手写批注控制、定时翻页与缩放微调）、单/双页排版与自由拖拽手写笔工具箱
+ * 包含沉浸式视口、顶部控制条（内嵌滑动缩放条、一体化翻页控制与定时翻页）、单/双页排版与自由拖拽手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -36,7 +36,7 @@ export class ScoreViewer {
   render() {
     this.container.innerHTML = `
       <div class="score-viewer-layout">
-        <!-- 顶部紧凑控制栏 -->
+        <!-- 顶部紧凑控制栏 (高级流式排布) -->
         <header class="reader-topbar" id="readerTopbar">
           <div class="topbar-left">
             <button class="btn btn-secondary btn-sm topbar-back-btn" id="readerBackBtn" title="返回乐谱库">
@@ -50,11 +50,17 @@ export class ScoreViewer {
           </div>
 
           <div class="topbar-center">
-            <!-- 页面切换与页码显示 -->
-            <div class="page-nav-controls">
-              <button class="nav-arrow-btn" id="prevPageBtn" title="上一页 (左踏板/PageUp/向下滑)">◀</button>
-              <span class="page-indicator" id="pageIndicator">1 / 1</span>
-              <button class="nav-arrow-btn" id="nextPageBtn" title="下一页 (右踏板/PageDown/向上滑)">▶</button>
+            <!-- 一体化连贯翻页药丸胶囊 -->
+            <div class="page-nav-segmented">
+              <button class="nav-segment-btn nav-btn-prev" id="prevPageBtn" title="上一页 (左踏板/PageUp/向下滑)">
+                ‹
+              </button>
+              <div class="page-indicator-badge" id="pageIndicator">
+                1 / 1
+              </div>
+              <button class="nav-segment-btn nav-btn-next" id="nextPageBtn" title="下一页 (右踏板/PageDown/向上滑)">
+                ›
+              </button>
             </div>
 
             <!-- 内嵌顶部工具栏的定时翻页控制器 -->
@@ -62,16 +68,11 @@ export class ScoreViewer {
           </div>
 
           <div class="topbar-right">
-            <!-- 手写批注开关按钮 (控制批注开启/关闭) -->
-            <button class="btn btn-ghost btn-sm topbar-pen-btn" id="topbarPenToggleBtn" title="打开/关闭手写批注工具箱">
-              🖊️ <span class="btn-label-text">手写</span>
-            </button>
-
-            <!-- 乐谱缩放微调控制器 -->
-            <div class="zoom-control-group">
-              <button class="zoom-btn" id="zoomOutBtn" title="缩小乐谱">-</button>
-              <span class="zoom-label" id="zoomLabel">100%</span>
-              <button class="zoom-btn" id="zoomInBtn" title="放大乐谱">+</button>
+            <!-- 左右触控滑动缩放控制器 (Swipe Zoom Slider) -->
+            <div class="zoom-slider-box" title="左右拖动滑块或滑动缩放乐谱">
+              <span class="zoom-icon-label">🔍</span>
+              <input type="range" class="zoom-range-slider" id="zoomRangeSlider" min="60" max="260" step="5" value="100">
+              <span class="zoom-pct-display" id="zoomLabel">100%</span>
             </div>
 
             <!-- 排版模式切换 (仅单页/双页，竖屏仅单页) -->
@@ -108,7 +109,7 @@ export class ScoreViewer {
           <div class="score-pages-stage" id="scorePagesStage"></div>
         </main>
 
-        <!-- 浮动手写笔工具箱容器 (半透明自由拖拽移动) -->
+        <!-- 浮动手写笔工具箱容器 (半透明自由拖拽移动 + 智能边缘避让) -->
         <div class="floating-pen-container" id="floatingPenContainer"></div>
       </div>
     `;
@@ -200,11 +201,6 @@ export class ScoreViewer {
       this.onBackToLibrary();
     });
 
-    // 顶部手写笔开关
-    this.container.querySelector('#topbarPenToggleBtn')?.addEventListener('click', () => {
-      this.penToolbox.toggle();
-    });
-
     // 翻页按键
     this.container.querySelector('#prevPageBtn')?.addEventListener('click', () => {
       this.reader.prevPage();
@@ -227,14 +223,11 @@ export class ScoreViewer {
       }
     });
 
-    // 缩放控制
-    this.container.querySelector('#zoomInBtn')?.addEventListener('click', () => {
-      this.currentZoom = Math.min(this.currentZoom + 0.15, 2.5);
-      this.reader.setZoom(this.currentZoom);
-      this.updateZoomLabel();
-    });
-    this.container.querySelector('#zoomOutBtn')?.addEventListener('click', () => {
-      this.currentZoom = Math.max(this.currentZoom - 0.15, 0.6);
+    // 左右滑动缩放控制器
+    const zoomSlider = this.container.querySelector('#zoomRangeSlider');
+    zoomSlider?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      this.currentZoom = val / 100;
       this.reader.setZoom(this.currentZoom);
       this.updateZoomLabel();
     });
@@ -282,8 +275,11 @@ export class ScoreViewer {
 
   updateZoomLabel() {
     const label = this.container.querySelector('#zoomLabel');
-    if (label) {
-      label.textContent = `${Math.round(this.currentZoom * 100)}%`;
+    const slider = this.container.querySelector('#zoomRangeSlider');
+    const pct = Math.round(this.currentZoom * 100);
+    if (label) label.textContent = `${pct}%`;
+    if (slider && parseInt(slider.value, 10) !== pct) {
+      slider.value = pct;
     }
   }
 
@@ -342,7 +338,6 @@ export class ScoreViewer {
     const cur = appState.get('currentPage') || 0;
     const total = appState.get('totalPages') || 1;
     const layout = appState.get('layoutMode');
-    const isPenActive = appState.get('isPenActive');
 
     const ind = this.container.querySelector('#pageIndicator');
     if (ind) {
@@ -352,20 +347,6 @@ export class ScoreViewer {
         ind.textContent = `${p1}-${p2} / ${total}`;
       } else {
         ind.textContent = `${cur + 1} / ${total}`;
-      }
-    }
-
-    const penBtn = this.container.querySelector('#topbarPenToggleBtn');
-    if (penBtn) {
-      penBtn.classList.toggle('active', isPenActive);
-      if (isPenActive) {
-        penBtn.style.backgroundColor = 'var(--accent-light)';
-        penBtn.style.color = 'var(--accent-primary)';
-        penBtn.style.borderColor = 'var(--accent-primary)';
-      } else {
-        penBtn.style.backgroundColor = 'transparent';
-        penBtn.style.color = 'var(--text-secondary)';
-        penBtn.style.borderColor = 'transparent';
       }
     }
   }
