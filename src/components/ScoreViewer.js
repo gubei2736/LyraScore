@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读与演奏主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页与缩放微调）、单/双页排版切换与自由拖拽手写笔工具箱
+ * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页与缩放微调）、单/双页排版（横竖屏智能约束）与自由拖拽手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -8,7 +8,6 @@ import { AutoFlipController } from '../core/autoFlip.js';
 import { PenToolbox } from './PenToolbox.js';
 import { FlipBar } from './FlipBar.js';
 import { appState, KEY_SIGNATURES } from '../core/state.js';
-import { exportCurrentPageAsImage } from '../utils/exporter.js';
 import { wakeLockManager } from '../utils/wakeLock.js';
 
 export class ScoreViewer {
@@ -27,6 +26,7 @@ export class ScoreViewer {
 
     this.render();
     this.initReader();
+    this.initOrientationWatcher();
 
     appState.subscribe(() => {
       this.syncState();
@@ -36,12 +36,12 @@ export class ScoreViewer {
   render() {
     this.container.innerHTML = `
       <div class="score-viewer-layout">
-        <!-- 顶部紧凑演奏工具栏 (全功能集成) -->
+        <!-- 顶部紧凑演奏工具栏 (响应式流式布局) -->
         <header class="reader-topbar" id="readerTopbar">
           <div class="topbar-left">
             <button class="btn btn-ghost topbar-back-btn" id="readerBackBtn" title="返回乐谱库">
               <span class="btn-icon">◀</span>
-              <span>书架</span>
+              <span class="back-text">书架</span>
             </button>
             <div class="score-title-meta">
               <h2 class="viewer-score-title" id="viewerScoreTitle">乐谱加载中...</h2>
@@ -69,26 +69,20 @@ export class ScoreViewer {
               <button class="zoom-btn" id="zoomInBtn" title="放大乐谱">+</button>
             </div>
 
-            <!-- 排版模式切换 -->
+            <!-- 排版模式切换 (仅单页/双页，竖屏仅单页) -->
             <div class="layout-toggle-group">
-              <button class="icon-toggle-btn active" data-layout="single" title="单页模式 (适合竖屏平板)">📄</button>
-              <button class="icon-toggle-btn" data-layout="double" title="双页并排模式 (适合横屏平板)">📖</button>
-              <button class="icon-toggle-btn" data-layout="scroll" title="垂直连续滚动">📜</button>
+              <button class="icon-toggle-btn active" data-layout="single" title="单页模式">📄</button>
+              <button class="icon-toggle-btn" data-layout="double" id="btnDoublePage" title="双页并排模式 (仅横屏可用)">📖</button>
             </div>
 
             <!-- 主题切换 -->
             <button class="btn btn-ghost btn-sm" id="themeCycleBtn" title="切换演奏色调 (羊皮纸/深色/纯白)">
-              🎨 主题
-            </button>
-
-            <!-- 导出带笔记乐谱 -->
-            <button class="btn btn-ghost btn-sm" id="exportScoreBtn" title="导出带有手写笔迹的乐谱图片">
-              📤 导出
+              🎨 <span class="btn-label-text">主题</span>
             </button>
 
             <!-- 舞台沉浸演奏模式 (全屏+防息屏) -->
             <button class="btn btn-primary btn-sm stage-mode-btn" id="stageModeBtn" title="开启舞台沉浸全屏演奏">
-              🎭 演奏模式
+              🎭 <span class="btn-label-text">演奏</span>
             </button>
           </div>
         </header>
@@ -98,7 +92,7 @@ export class ScoreViewer {
           ✕ 退出演奏
         </button>
 
-        <!-- 核心乐谱阅读视口 -->
+        <!-- 核心乐谱阅读视口 (支持原生上下顺畅滑动) -->
         <main class="score-viewport-container" id="scoreViewport">
           <!-- 左右触控翻页热区 (适合弹琴时轻触边缘快速翻谱) -->
           <div class="touch-hotzone hotzone-left" id="hotzoneLeft" title="点击上一页"></div>
@@ -133,6 +127,36 @@ export class ScoreViewer {
     if (flipSlot) {
       this.flipBar = new FlipBar(flipSlot, this.autoFlip);
     }
+  }
+
+  initOrientationWatcher() {
+    const checkOrientation = () => {
+      const isLandscape = window.innerWidth > window.innerHeight;
+      const doubleBtn = this.container.querySelector('#btnDoublePage');
+
+      if (!isLandscape) {
+        // 竖屏：强制单页，禁用双页
+        if (doubleBtn) {
+          doubleBtn.disabled = true;
+          doubleBtn.classList.add('disabled-btn');
+          doubleBtn.title = '双页模式仅在横屏下可用';
+        }
+        this.reader.setLayoutMode('single');
+        this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
+          b.classList.toggle('active', b.dataset.layout === 'single');
+        });
+      } else {
+        // 横屏：启用双页
+        if (doubleBtn) {
+          doubleBtn.disabled = false;
+          doubleBtn.classList.remove('disabled-btn');
+          doubleBtn.title = '双页并排模式';
+        }
+      }
+    };
+
+    window.addEventListener('resize', checkOrientation);
+    checkOrientation();
   }
 
   setStageMode(active) {
@@ -196,22 +220,14 @@ export class ScoreViewer {
       this.updateZoomLabel();
     });
 
-    // 排版模式切换
+    // 排版模式切换（只处理单页和双页）
     this.container.querySelectorAll('.layout-toggle-group button').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (btn.disabled) return;
         const layout = btn.dataset.layout;
         this.reader.setLayoutMode(layout);
         this.container.querySelectorAll('.layout-toggle-group button').forEach(b => b.classList.toggle('active', b === btn));
       });
-    });
-
-    // 导出
-    this.container.querySelector('#exportScoreBtn')?.addEventListener('click', async () => {
-      const stage = this.container.querySelector('#scorePagesStage');
-      const pageWrapper = stage.querySelector('.score-page-wrapper');
-      const score = appState.get('currentScore');
-      const title = (score?.title || '乐谱').replace(/[\\/:*?"<>|]/g, '_');
-      await exportCurrentPageAsImage(pageWrapper, `${title}_批注版.png`);
     });
 
     // 主题切换
@@ -268,12 +284,11 @@ export class ScoreViewer {
         <span class="meta-tag-pill">${score.format.toUpperCase()}</span>
         ${keyObj ? `<span class="meta-key-badge">${keyObj.name.split(' (')[0]}</span>` : ''}
         ${score.isCopy ? `<span class="card-copy-badge">🌿 副本: ${score.copyNote || ''}</span>` : ''}
-        ${(score.tags || []).map(t => `<span class="meta-tag-pill">#${t}</span>`).join('')}
       `;
     }
 
     const isLandscape = window.innerWidth > window.innerHeight;
-    const initialMode = (isLandscape && (score.pageCount > 1 || score.format === 'pdf')) ? 'single' : 'single';
+    const initialMode = (isLandscape && (score.pageCount > 1 || score.format === 'pdf')) ? 'double' : 'single';
     this.reader.setLayoutMode(initialMode);
     this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
       b.classList.toggle('active', b.dataset.layout === initialMode);

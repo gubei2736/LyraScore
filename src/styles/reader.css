@@ -1,5 +1,5 @@
 /* ==========================================================================
-   LyraScore 乐谱阅读与演奏视口样式 (专为平板触控/手写笔优化)
+   LyraScore 乐谱阅读与演奏视口样式 (支持顺畅上下滑动与竖屏流式响应)
    ========================================================================== */
 
 .score-viewer-layout {
@@ -14,16 +14,17 @@
 
 /* 顶部紧凑工具栏 */
 .reader-topbar {
-  height: 56px;
-  background-color: var(--bg-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  height: 52px;
+  background-color: var(--bg-glass, rgba(255, 255, 255, 0.9));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 14px;
   z-index: 50;
+  gap: 8px;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
 }
 .reader-topbar.hidden-bar {
@@ -35,17 +36,25 @@
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.topbar-back-btn {
+  padding: 6px 8px;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 .score-title-meta {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 .viewer-score-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
-  max-width: 240px;
+  max-width: 220px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -59,25 +68,26 @@
 .topbar-center {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .page-nav-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  padding: 4px 12px;
+  padding: 3px 8px;
   border-radius: var(--radius-full);
 }
 .nav-arrow-btn {
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: 4px;
 }
 .nav-arrow-btn:hover {
@@ -85,10 +95,10 @@
   color: var(--text-primary);
 }
 .page-indicator {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
-  min-width: 50px;
+  min-width: 42px;
   text-align: center;
 }
 
@@ -100,35 +110,35 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
   padding: 2px 6px 2px 4px;
-  gap: 6px;
+  gap: 4px;
   position: relative;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .topbar-flip-widget.running {
   border-color: var(--accent-primary, #1a56db);
-  box-shadow: 0 0 10px rgba(26, 86, 219, 0.2);
+  box-shadow: 0 0 8px rgba(26, 86, 219, 0.2);
   background-color: var(--accent-light, #e0e7ff);
 }
 
 .topbar-flip-play-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: var(--radius-full);
 }
 .topbar-flip-play-btn:hover {
   background-color: var(--bg-surface);
 }
 .flip-play-icon {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--accent-primary, #1a56db);
 }
 .flip-play-text {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -140,12 +150,12 @@
   gap: 2px;
 }
 .flip-step-btn {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 1px solid var(--border-color);
   background: var(--bg-surface);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: bold;
   cursor: pointer;
   display: flex;
@@ -159,9 +169,9 @@
 .topbar-flip-gear-btn {
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 2px;
 }
 
 .topbar-flip-popover {
@@ -169,14 +179,14 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 280px;
+  width: 270px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   padding: 14px;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   z-index: 90;
 }
 .topbar-flip-popover.open {
@@ -186,14 +196,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 /* 缩放控制器 */
@@ -203,16 +214,16 @@
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 2px 6px;
-  gap: 4px;
+  padding: 2px 4px;
+  gap: 2px;
 }
 .zoom-btn {
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: bold;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: 4px;
   color: var(--text-secondary);
 }
@@ -221,10 +232,10 @@
   color: var(--text-primary);
 }
 .zoom-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-primary);
-  min-width: 38px;
+  min-width: 34px;
   text-align: center;
 }
 
@@ -238,8 +249,8 @@
 .icon-toggle-btn {
   border: none;
   background: transparent;
-  padding: 5px 8px;
-  font-size: 14px;
+  padding: 4px 6px;
+  font-size: 13px;
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
@@ -247,17 +258,22 @@
   background-color: var(--bg-surface);
   box-shadow: var(--shadow-sm);
 }
+.icon-toggle-btn.disabled-btn {
+  opacity: 0.35;
+  cursor: not-allowed;
+  filter: grayscale(1);
+}
 
-/* 演奏模式悬浮退出胶囊按钮 (半透明防误触) */
+/* 演奏模式悬浮退出胶囊按钮 */
 .floating-stage-exit-pill {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 14px;
+  right: 14px;
   z-index: 100;
-  background: rgba(17, 24, 39, 0.75);
+  background: rgba(17, 24, 39, 0.7);
   color: #ffffff;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-full);
   padding: 6px 14px;
@@ -267,52 +283,47 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  transition: all 0.2s ease;
-}
-.floating-stage-exit-pill:hover {
-  background: rgba(17, 24, 39, 0.95);
-  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* 核心阅读视口 */
+/* 核心阅读视口：支持原生上下自由滑动 */
 .score-viewport-container {
   flex: 1;
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: hidden;
   position: relative;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 20px 0;
+  padding: 16px 0 80px 0;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x pan-y pinch-zoom;
+  touch-action: pan-y pinch-zoom;
 }
 
-/* 触控翻页边缘热区 */
+/* 触控翻页热区：缩小边缘宽度，避免阻碍中间上下滑屏 */
 .touch-hotzone {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 10;
+  z-index: 5;
 }
 .hotzone-left {
   left: 0;
-  width: 12%;
+  width: 8%;
   cursor: w-resize;
 }
 .hotzone-right {
   right: 0;
-  width: 12%;
+  width: 8%;
   cursor: e-resize;
 }
 .hotzone-center {
-  left: 35%;
-  width: 30%;
+  left: 40%;
+  width: 20%;
   top: 0;
-  height: 60px;
+  height: 48px;
   cursor: pointer;
 }
 
@@ -321,21 +332,20 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
   transition: transform 0.1s ease-out;
 }
 
-.score-single-container, .score-double-container, .score-scroll-container {
+.score-single-container, .score-double-container {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
 }
-
 .score-double-container {
   flex-direction: row;
 }
@@ -343,7 +353,7 @@
 .score-page-wrapper {
   position: relative;
   background-color: #ffffff;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
   border-radius: 4px;
   overflow: hidden;
   user-select: none;
@@ -361,20 +371,40 @@
   left: 0;
   width: 100%;
   height: 100%;
-  touch-action: none;
   cursor: crosshair;
   z-index: 20;
 }
 
 /* MusicXML 容器 */
 .xml-page-wrapper {
-  width: 92%;
-  max-width: 1100px;
+  width: 94%;
+  max-width: 1050px;
   min-height: 900px;
-  padding: 24px;
+  padding: 20px;
   background: #ffffff;
 }
 .xml-music-container {
   width: 100%;
   min-height: 800px;
+}
+
+/* ================= 竖屏平板响应式优化 ================= */
+@media (max-width: 850px) {
+  .reader-topbar {
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .viewer-score-title {
+    max-width: 130px;
+    font-size: 13px;
+  }
+  .back-text, .btn-label-text {
+    display: none;
+  }
+  .topbar-flip-stepper {
+    display: none;
+  }
+  .zoom-control-group {
+    display: none;
+  }
 }

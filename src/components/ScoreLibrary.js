@@ -1,6 +1,6 @@
 /**
  * 乐谱库与分类中心 (ScoreLibrary Component)
- * 包含现代乐谱网格、调式分类、标签云过滤、搜索、副本克隆与文件导入
+ * 包含现代乐谱网格、可折叠侧边栏、调式分类、标签云过滤、搜索与文件导入
  */
 
 import { scoreDB } from '../core/db.js';
@@ -18,8 +18,9 @@ export class ScoreLibrary {
     this.searchQuery = '';
     this.selectedTag = null;
     this.selectedKey = null;
-    this.selectedFormat = 'all'; // 'all' | 'pdf' | 'xml' | 'image'
+    this.selectedFormat = 'all';
     this.onlyFavorites = false;
+    this.isSidebarCollapsed = localStorage.getItem('lyra_sidebar_collapsed') === 'true';
 
     this.render();
     this.loadScores();
@@ -31,20 +32,35 @@ export class ScoreLibrary {
     this.renderTagCloud();
   }
 
+  toggleSidebar(collapse) {
+    if (typeof collapse === 'boolean') {
+      this.isSidebarCollapsed = collapse;
+    } else {
+      this.isSidebarCollapsed = !this.isSidebarCollapsed;
+    }
+    localStorage.setItem('lyra_sidebar_collapsed', this.isSidebarCollapsed);
+    const sidebar = this.container.querySelector('#librarySidebar');
+    sidebar?.classList.toggle('collapsed', this.isSidebarCollapsed);
+  }
+
   render() {
     this.container.innerHTML = `
       <div class="library-container">
         <!-- 隐藏的全局文件选择器 -->
         <input type="file" id="scoreFileInput" accept=".pdf,.xml,.musicxml,.mxl,image/*" multiple style="display: none;">
 
-        <!-- 侧边分类与标签导航栏 (平板大屏分栏) -->
-        <aside class="library-sidebar">
+        <!-- 可折叠侧边分类与标签导航栏 -->
+        <aside class="library-sidebar ${this.isSidebarCollapsed ? 'collapsed' : ''}" id="librarySidebar">
           <div class="brand-header">
             <div class="brand-logo">🎼</div>
             <div class="brand-info">
               <h1 class="brand-title">LyraScore</h1>
               <span class="brand-subtitle">平板乐谱工作站</span>
             </div>
+            <!-- 侧边栏收起按钮 -->
+            <button class="sidebar-collapse-toggle-btn" id="btnCollapseSidebar" title="收起侧边栏">
+              ◀
+            </button>
           </div>
 
           <!-- 快速导入按钮 -->
@@ -101,6 +117,11 @@ export class ScoreLibrary {
         <main class="library-main">
           <!-- 顶部搜索与过滤条 -->
           <header class="library-header">
+            <!-- 展开/收起侧边栏汉堡按钮 -->
+            <button class="sidebar-expand-btn" id="btnExpandSidebar" title="展开/收起侧边栏">
+              ☰
+            </button>
+
             <div class="search-bar-box">
               <span class="search-icon">🔍</span>
               <input type="text" class="search-input" id="scoreSearchInput" placeholder="搜索乐谱标题、作曲家或标签...">
@@ -111,7 +132,7 @@ export class ScoreLibrary {
               <button class="filter-pill ${this.selectedFormat === 'all' ? 'active' : ''}" data-format="all">全部</button>
               <button class="filter-pill ${this.selectedFormat === 'pdf' ? 'active' : ''}" data-format="pdf">PDF</button>
               <button class="filter-pill ${this.selectedFormat === 'xml' ? 'active' : ''}" data-format="xml">MusicXML</button>
-              <button class="filter-pill ${this.selectedFormat === 'image' ? 'active' : ''}" data-format="image">图片谱</button>
+              <button class="filter-pill ${this.selectedFormat === 'image' ? 'active' : ''}" data-format="image">图片</button>
             </div>
           </header>
 
@@ -137,6 +158,14 @@ export class ScoreLibrary {
   }
 
   bindEvents() {
+    // 侧边栏折叠与展开
+    this.container.querySelector('#btnCollapseSidebar')?.addEventListener('click', () => {
+      this.toggleSidebar(true);
+    });
+    this.container.querySelector('#btnExpandSidebar')?.addEventListener('click', () => {
+      this.toggleSidebar();
+    });
+
     this.container.querySelector('#btnImportSidebar')?.addEventListener('click', () => {
       this.triggerFileImport();
     });
@@ -406,7 +435,6 @@ export class ScoreLibrary {
 
       if (ext === 'pdf') {
         format = 'pdf';
-        // 使用 ArrayBuffer 原生二进制存储，最安全且完全避免 Base64 编码损坏
         const arrayBuf = await file.arrayBuffer();
         fileData = arrayBuf;
 

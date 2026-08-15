@@ -1,12 +1,12 @@
 /* ==========================================================================
-   LyraScore 手写笔浮动工具箱样式 (半透明毛玻璃 + 全屏自由拖拽)
+   LyraScore 手写笔浮动工具箱样式 (极致半透明水晶毛玻璃 + 全屏自由拖拽)
    ========================================================================== */
 
 /* 浮动手写笔工具箱容器 */
 .floating-pen-container {
   position: fixed;
-  bottom: 28px;
-  right: 28px;
+  bottom: 24px;
+  right: 24px;
   z-index: 80;
   touch-action: none;
   user-select: none;
@@ -27,7 +27,7 @@
   max-width: 380px;
 }
 
-/* 折叠胶囊状态 (半透明可拖拽) */
+/* 折叠胶囊状态 (极致半透明毛玻璃) */
 .pen-toolbox.collapsed {
   flex-direction: row;
   border-radius: var(--radius-full, 9999px);
@@ -44,25 +44,28 @@
 .toolbox-toggle-btn.draggable-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(26, 86, 219, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(26, 86, 219, 0.42);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   color: #ffffff;
-  padding: 8px 16px;
+  padding: 6px 14px;
   border-radius: var(--radius-full, 9999px);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: grab;
-  box-shadow: 0 4px 16px rgba(26, 86, 219, 0.35);
+  box-shadow: 0 3px 12px rgba(26, 86, 219, 0.2);
   touch-action: none;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+.toolbox-toggle-btn.draggable-pill:hover {
+  background: rgba(26, 86, 219, 0.65);
 }
 .toolbox-toggle-btn.draggable-pill:active {
   cursor: grabbing;
-  background: rgba(26, 86, 219, 0.95);
-  transform: scale(0.98);
+  background: rgba(26, 86, 219, 0.85);
+  transform: scale(0.96);
 }
 
 .pen-toolbox.expanded .toolbox-toggle-btn {
