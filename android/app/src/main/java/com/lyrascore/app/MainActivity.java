@@ -54,7 +54,9 @@ public class MainActivity extends Activity {
 
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
-        settings.setSupportZoom(true);
+
+        // 禁用 WebView 原生抢占式缩放，将双指 Pinch-to-Zoom 原始触摸事件 100% 交付前端乐谱引擎
+        settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
@@ -81,8 +83,8 @@ public class MainActivity extends Activity {
             @Override
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                 if (mFilePathCallback != null) {
-                    mFilePathCallback.onReceiveValue(null);
-                    mFilePathCallback = null;
+                  mFilePathCallback.onReceiveValue(null);
+                  mFilePathCallback = null;
                 }
                 mFilePathCallback = filePathCallback;
 
@@ -187,7 +189,6 @@ public class MainActivity extends Activity {
                 @Override
                 public void onReceiveValue(String value) {
                     if ("true".equals(value) || "\"true\"".equals(value)) {
-                        // 前端已退回到书架主页，拦截系统退出
                         return;
                     }
                     MainActivity.super.onBackPressed();

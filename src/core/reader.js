@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、手势穿透、高灵敏双指平滑 Pinch-to-Zoom 缩放与双向手势翻页引擎
+ * 具备防循环闪烁保护、手势穿透、全局捕获双指平滑 Pinch-to-Zoom 缩放与双向手势翻页引擎
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -59,12 +59,12 @@ export class ScoreReader {
       return Math.sqrt(dx * dx + dy * dy);
     };
 
-    const vp = this.viewportEl;
-    if (!vp) return;
+    // 全局绑定手势，确保手指落在乐谱任何图层均能 100% 捕获
+    document.addEventListener('touchstart', (e) => {
+      if (appState.get('currentView') !== 'reader') return;
+      if (appState.get('isPenActive')) return; // 手写笔模式下绘制优先
 
-    vp.addEventListener('touchstart', (e) => {
-      if (appState.get('isPenActive')) return;
-
+      // 检测到双指触碰
       if (e.touches.length >= 2) {
         isMultiTouch = true;
         isSwiping = false;
@@ -74,7 +74,12 @@ export class ScoreReader {
         return;
       }
 
+      // 单指触碰
       if (e.touches.length === 1) {
+        // 确保单指事件发生在阅读区视口内
+        const target = e.target;
+        if (!this.viewportEl?.contains(target)) return;
+
         isMultiTouch = false;
         isSwiping = true;
         initialDistance = 0;
@@ -86,10 +91,11 @@ export class ScoreReader {
       }
     }, { passive: false });
 
-    vp.addEventListener('touchmove', (e) => {
+    document.addEventListener('touchmove', (e) => {
+      if (appState.get('currentView') !== 'reader') return;
       if (appState.get('isPenActive')) return;
 
-      // 动态提升为双指缩放 (即使先触碰了一指，第二指落下时立即无缝切换)
+      // 1. 双指 Pinch-to-Zoom 动态缩放 (高优先级无缝接管)
       if (e.touches.length >= 2) {
         if (!isMultiTouch || initialDistance <= 0) {
           isMultiTouch = true;
@@ -100,13 +106,14 @@ export class ScoreReader {
           return;
         }
 
-        e.preventDefault(); // 阻止原生页面滚动/原生缩放冲突
-        const dist = getDistance(e.touches[0], e.touches[1]);
-        if (dist > 0 && initialDistance > 0) {
-          const factor = dist / initialDistance;
-          const scale = Math.min(Math.max(initialScale * factor, 0.5), 2.8);
-          this.zoomScale = scale;
-          this.container.style.transform = `scale(${scale})`;
+        if (e.cancelable) e.preventDefault();
+
+        const currentDist = getDistance(e.touches[0], e.touches[1]);
+        if (currentDist > 0 && initialDistance > 0) {
+          const ratio = currentDist / initialDistance;
+          const targetScale = Math.min(Math.max(initialScale * ratio, 0.5), 2.8);
+          this.zoomScale = targetScale;
+          this.container.style.transform = `scale(${targetScale})`;
           this.container.style.transformOrigin = 'top center';
           if (this.onZoomChange) {
             this.onZoomChange(this.zoomScale);
@@ -115,7 +122,7 @@ export class ScoreReader {
         return;
       }
 
-      // 单指滑动手势带弹性阻尼
+      // 2. 单指滑动手势阻尼位移
       if (isSwiping && e.touches.length === 1) {
         currentX = e.touches[0].clientX;
         currentY = e.touches[0].clientY;
@@ -136,7 +143,8 @@ export class ScoreReader {
       }
     }, { passive: false });
 
-    vp.addEventListener('touchend', async (e) => {
+    document.addEventListener('touchend', async (e) => {
+      if (appState.get('currentView') !== 'reader') return;
       if (appState.get('isPenActive')) return;
 
       if (isMultiTouch) {
