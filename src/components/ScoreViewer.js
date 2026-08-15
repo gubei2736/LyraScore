@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读与演奏主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页）、单/双页排版切换与手写笔工具箱
+ * 包含沉浸式视口、顶部演奏控制条（内嵌定时翻页与缩放微调）、单/双页排版切换与自由拖拽手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
@@ -23,6 +23,7 @@ export class ScoreViewer {
     this.penToolbox = null;
     this.flipBar = null;
     this.isStageMode = false;
+    this.currentZoom = 1.0;
 
     this.render();
     this.initReader();
@@ -61,10 +62,12 @@ export class ScoreViewer {
           </div>
 
           <div class="topbar-right">
-            <!-- 手写批注开关 (可折叠隐藏) -->
-            <button class="btn btn-ghost btn-sm" id="togglePenToolboxBtn" title="显示/隐藏手写批注工具箱">
-              🖊️ 批注
-            </button>
+            <!-- 乐谱缩放微调控制器 -->
+            <div class="zoom-control-group">
+              <button class="zoom-btn" id="zoomOutBtn" title="缩小乐谱">-</button>
+              <span class="zoom-label" id="zoomLabel">100%</span>
+              <button class="zoom-btn" id="zoomInBtn" title="放大乐谱">+</button>
+            </div>
 
             <!-- 排版模式切换 -->
             <div class="layout-toggle-group">
@@ -106,7 +109,7 @@ export class ScoreViewer {
           <div class="score-pages-stage" id="scorePagesStage"></div>
         </main>
 
-        <!-- 浮动手写笔工具箱容器 -->
+        <!-- 浮动手写笔工具箱容器 (半透明自由拖拽移动) -->
         <div class="floating-pen-container" id="floatingPenContainer"></div>
       </div>
     `;
@@ -181,9 +184,16 @@ export class ScoreViewer {
       }
     });
 
-    // 手写批注开关
-    this.container.querySelector('#togglePenToolboxBtn')?.addEventListener('click', () => {
-      this.penToolbox.toggle();
+    // 缩放控制
+    this.container.querySelector('#zoomInBtn')?.addEventListener('click', () => {
+      this.currentZoom = Math.min(this.currentZoom + 0.15, 2.5);
+      this.reader.setZoom(this.currentZoom);
+      this.updateZoomLabel();
+    });
+    this.container.querySelector('#zoomOutBtn')?.addEventListener('click', () => {
+      this.currentZoom = Math.max(this.currentZoom - 0.15, 0.6);
+      this.reader.setZoom(this.currentZoom);
+      this.updateZoomLabel();
     });
 
     // 排版模式切换
@@ -235,8 +245,18 @@ export class ScoreViewer {
     });
   }
 
+  updateZoomLabel() {
+    const label = this.container.querySelector('#zoomLabel');
+    if (label) {
+      label.textContent = `${Math.round(this.currentZoom * 100)}%`;
+    }
+  }
+
   async openScore(score) {
     this.setStageMode(false);
+    this.currentZoom = 1.0;
+    this.updateZoomLabel();
+
     const titleEl = this.container.querySelector('#viewerScoreTitle');
     const badgesRow = this.container.querySelector('#viewerBadgesRow');
 
@@ -252,7 +272,6 @@ export class ScoreViewer {
       `;
     }
 
-    // 默认判断：若有多页且为横屏，使用双页，否则使用单页
     const isLandscape = window.innerWidth > window.innerHeight;
     const initialMode = (isLandscape && (score.pageCount > 1 || score.format === 'pdf')) ? 'single' : 'single';
     this.reader.setLayoutMode(initialMode);

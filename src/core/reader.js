@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 统一调度 PDF / MusicXML / 图片乐谱，管理单页/双页/滚动排版与手写笔图层绑定
+ * 具备防循环闪烁保护、双指平滑缩放手势 (Pinch-to-Zoom) 与单双页高清排版
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -12,30 +12,78 @@ import { appState } from './state.js';
 
 export class ScoreReader {
   constructor(viewportContainerElement) {
-    this.container = viewportContainerElement;
+    this.container = viewportContainerElement; // #scorePagesStage
+    this.viewportEl = document.getElementById('scoreViewport') || this.container.parentElement;
     this.currentScore = null;
     this.renderer = null;
-    this.strokeRenderers = new Map(); // pageIndex => StrokeRenderer instance
+    this.strokeRenderers = new Map();
 
     this.currentPage = 0; // 0-based
     this.totalPages = 1;
-    this.layoutMode = 'single'; // 'single' | 'double' | 'scroll'
+    this.layoutMode = 'single';
     this.zoomScale = 1.0;
+    this.lastRenderedWidth = 0;
+    this.isRendering = false;
 
-    this.initResizeObserver();
+    this.initWindowResizeListener();
+    this.initPinchZoom();
   }
 
-  initResizeObserver() {
+  initWindowResizeListener() {
     let resizeTimer = null;
-    this.resizeObserver = new ResizeObserver(() => {
-      if (this.currentScore) {
+    window.addEventListener('resize', () => {
+      if (this.currentScore && !this.isRendering) {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
-          this.renderCurrentLayout();
-        }, 150);
+          const currentWidth = this.viewportEl?.clientWidth || window.innerWidth;
+          // 仅在宽度发生实质变化（例如旋转屏幕）时才触发重排，彻底消灭死循环闪烁
+          if (Math.abs(currentWidth - this.lastRenderedWidth) > 20) {
+            this.renderCurrentLayout();
+          }
+        }, 300);
       }
     });
-    this.resizeObserver.observe(this.container);
+  }
+
+  initPinchZoom() {
+    let initialDistance = 0;
+    let initialScale = 1.0;
+
+    const getDistance = (touch1, touch2) => {
+      const dx = touch1.clientX - touch2.clientX;
+      const dy = touch1.clientY - touch2.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    this.viewportEl?.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        initialDistance = getDistance(e.touches[0], e.touches[1]);
+        initialScale = this.zoomScale;
+      }
+    }, { passive: true });
+
+    this.viewportEl?.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && initialDistance > 0) {
+        const currentDistance = getDistance(e.touches[0], e.touches[1]);
+        const scaleChange = currentDistance / initialDistance;
+        let newScale = Math.min(Math.max(initialScale * scaleChange, 0.6), 2.8);
+        this.container.style.transform = `scale(${newScale})`;
+        this.container.style.transformOrigin = 'top center';
+      }
+    }, { passive: true });
+
+    this.viewportEl?.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2 && initialDistance > 0) {
+        initialDistance = 0;
+        // 保持平滑缩放
+      }
+    }, { passive: true });
+  }
+
+  setZoom(scale) {
+    this.zoomScale = Math.min(Math.max(scale, 0.6), 2.8);
+    this.container.style.transform = `scale(${this.zoomScale})`;
+    this.container.style.transformOrigin = 'top center';
   }
 
   async loadScore(score, initialPage = 0) {
@@ -43,7 +91,6 @@ export class ScoreReader {
     this.currentPage = initialPage;
     this.clearStrokes();
 
-    // 更新最后阅读时间
     score.lastReadTime = Date.now();
     scoreDB.saveScore(score);
 
@@ -75,94 +122,101 @@ export class ScoreReader {
   }
 
   async renderCurrentLayout() {
-    if (!this.currentScore || !this.renderer) return;
-    this.clearStrokes();
-    this.container.innerHTML = '';
+    if (!this.currentScore || !this.renderer || this.isRendering) return;
+    this.isRendering = true;
 
-    // 安全计算容器有效宽度
-    const rawWidth = this.container.clientWidth;
-    const containerWidth = rawWidth > 200 ? rawWidth : Math.max(window.innerWidth - 32, 600);
-    const mode = this.layoutMode;
+    try {
+      this.clearStrokes();
+      this.container.innerHTML = '';
+      this.container.style.transform = `scale(${this.zoomScale})`;
+      this.container.style.transformOrigin = 'top center';
 
-    if (this.currentScore.format === 'xml') {
-      const pageWrapper = document.createElement('div');
-      pageWrapper.className = 'score-page-wrapper xml-page-wrapper';
-      const xmlContainer = document.createElement('div');
-      xmlContainer.className = 'xml-music-container';
-      pageWrapper.appendChild(xmlContainer);
+      const vpWidth = this.viewportEl?.clientWidth || window.innerWidth;
+      const containerWidth = Math.max(vpWidth - 32, 600);
+      this.lastRenderedWidth = vpWidth;
 
-      const penCanvas = document.createElement('canvas');
-      penCanvas.className = 'pen-overlay-canvas';
-      pageWrapper.appendChild(penCanvas);
-      this.container.appendChild(pageWrapper);
+      const mode = this.layoutMode;
 
-      await this.renderer.load(this.currentScore.fileBlob || this.currentScore.fileData, xmlContainer);
+      if (this.currentScore.format === 'xml') {
+        const pageWrapper = document.createElement('div');
+        pageWrapper.className = 'score-page-wrapper xml-page-wrapper';
+        const xmlContainer = document.createElement('div');
+        xmlContainer.className = 'xml-music-container';
+        pageWrapper.appendChild(xmlContainer);
 
-      setTimeout(async () => {
-        const w = pageWrapper.clientWidth || 800;
-        const h = pageWrapper.clientHeight || 1100;
-        penCanvas.width = w;
-        penCanvas.height = h;
+        const penCanvas = document.createElement('canvas');
+        penCanvas.className = 'pen-overlay-canvas';
+        pageWrapper.appendChild(penCanvas);
+        this.container.appendChild(pageWrapper);
 
-        const strokeRenderer = new StrokeRenderer(penCanvas, {
-          scoreId: this.currentScore.id,
-          pageIndex: 0,
-          onChange: (strokes) => {
-            scoreDB.savePageAnnotations(this.currentScore.id, 0, strokes);
-          }
-        });
+        await this.renderer.load(this.currentScore.fileBlob || this.currentScore.fileData, xmlContainer);
 
-        const savedStrokes = await scoreDB.getPageAnnotations(this.currentScore.id, 0);
-        strokeRenderer.loadStrokes(savedStrokes);
-        this.strokeRenderers.set(0, strokeRenderer);
-        this.syncPenToolToRenderers();
-      }, 100);
-      return;
-    }
+        setTimeout(async () => {
+          const w = pageWrapper.clientWidth || 800;
+          const h = pageWrapper.clientHeight || 1100;
+          penCanvas.width = w;
+          penCanvas.height = h;
 
-    // PDF 与 图片乐谱排版
-    if (mode === 'double' && this.totalPages > 1) {
-      // 双页并排模式 (适合平板横屏多页)
-      const doubleContainer = document.createElement('div');
-      doubleContainer.className = 'score-double-container';
+          const strokeRenderer = new StrokeRenderer(penCanvas, {
+            scoreId: this.currentScore.id,
+            pageIndex: 0,
+            onChange: (strokes) => {
+              scoreDB.savePageAnnotations(this.currentScore.id, 0, strokes);
+            }
+          });
 
-      const leftPageIndex = this.currentPage % 2 === 0 ? this.currentPage : this.currentPage - 1;
-      const rightPageIndex = leftPageIndex + 1;
-
-      const pageWidth = Math.floor((containerWidth - 48) / 2);
-
-      const leftPageEl = await this.createPageElement(leftPageIndex, pageWidth);
-      if (leftPageEl) doubleContainer.appendChild(leftPageEl);
-
-      if (rightPageIndex < this.totalPages) {
-        const rightPageEl = await this.createPageElement(rightPageIndex, pageWidth);
-        if (rightPageEl) doubleContainer.appendChild(rightPageEl);
+          const savedStrokes = await scoreDB.getPageAnnotations(this.currentScore.id, 0);
+          strokeRenderer.loadStrokes(savedStrokes);
+          this.strokeRenderers.set(0, strokeRenderer);
+          this.syncPenToolToRenderers();
+        }, 100);
+        return;
       }
 
-      this.container.appendChild(doubleContainer);
-    } else if (mode === 'scroll') {
-      // 垂直连续滚动模式
-      const scrollContainer = document.createElement('div');
-      scrollContainer.className = 'score-scroll-container';
+      // PDF 与 图片乐谱渲染
+      if (mode === 'double' && this.totalPages > 1) {
+        const doubleContainer = document.createElement('div');
+        doubleContainer.className = 'score-double-container';
 
-      const pageWidth = Math.min(containerWidth - 32, 960);
-      for (let i = 0; i < this.totalPages; i++) {
-        const pageEl = await this.createPageElement(i, pageWidth);
-        if (pageEl) scrollContainer.appendChild(pageEl);
+        const leftPageIndex = this.currentPage % 2 === 0 ? this.currentPage : this.currentPage - 1;
+        const rightPageIndex = leftPageIndex + 1;
+
+        const pageWidth = Math.floor((containerWidth - 32) / 2);
+
+        const leftPageEl = await this.createPageElement(leftPageIndex, pageWidth);
+        if (leftPageEl) doubleContainer.appendChild(leftPageEl);
+
+        if (rightPageIndex < this.totalPages) {
+          const rightPageEl = await this.createPageElement(rightPageIndex, pageWidth);
+          if (rightPageEl) doubleContainer.appendChild(rightPageEl);
+        }
+
+        this.container.appendChild(doubleContainer);
+      } else if (mode === 'scroll') {
+        const scrollContainer = document.createElement('div');
+        scrollContainer.className = 'score-scroll-container';
+
+        const pageWidth = Math.min(containerWidth, 980);
+        for (let i = 0; i < this.totalPages; i++) {
+          const pageEl = await this.createPageElement(i, pageWidth);
+          if (pageEl) scrollContainer.appendChild(pageEl);
+        }
+        this.container.appendChild(scrollContainer);
+      } else {
+        // 单页模式
+        const singleContainer = document.createElement('div');
+        singleContainer.className = 'score-single-container';
+
+        const pageWidth = Math.min(containerWidth, 980);
+        const pageEl = await this.createPageElement(this.currentPage, pageWidth);
+        if (pageEl) singleContainer.appendChild(pageEl);
+        this.container.appendChild(singleContainer);
       }
-      this.container.appendChild(scrollContainer);
-    } else {
-      // 单页模式 (居中且自适应最大可读宽度)
-      const singleContainer = document.createElement('div');
-      singleContainer.className = 'score-single-container';
 
-      const pageWidth = Math.min(containerWidth - 32, 960);
-      const pageEl = await this.createPageElement(this.currentPage, pageWidth);
-      if (pageEl) singleContainer.appendChild(pageEl);
-      this.container.appendChild(singleContainer);
+      this.syncPenToolToRenderers();
+    } finally {
+      this.isRendering = false;
     }
-
-    this.syncPenToolToRenderers();
   }
 
   async createPageElement(pageIndex, targetWidth) {
@@ -178,7 +232,6 @@ export class ScoreReader {
     penCanvas.className = 'pen-overlay-canvas';
     pageWrapper.appendChild(penCanvas);
 
-    // 渲染底层乐谱页面 (1-based)
     const renderInfo = await this.renderer.renderPage(pageIndex + 1, baseCanvas, targetWidth);
 
     if (renderInfo) {
@@ -224,8 +277,6 @@ export class ScoreReader {
       });
     }
   }
-
-  // ================= 翻页与定位控制 =================
 
   async nextPage() {
     const step = (this.layoutMode === 'double' && this.totalPages > 1) ? 2 : 1;

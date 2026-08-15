@@ -1,7 +1,9 @@
 /**
  * 手写笔专业浮动工具箱 (PenToolbox)
- * 适配平板大屏触控与笔尖操作，包含压感笔、荧光笔、音乐印章、橡皮擦、撤销重做与调色盘
- * 支持完全收起与最小化至屏幕边缘，彻底避免遮挡乐谱
+ * 适配平板大屏触控，手写批注胶囊按钮具备：
+ * 1. 半透明防遮挡毛玻璃质感
+ * 2. 支持全屏自由拖拽任意移动位置 (Draggable Floating Pill)
+ * 3. 区分拖拽与轻触点击展开
  */
 
 import { MUSICAL_STAMPS } from '../core/penEngine/stamps.js';
@@ -11,7 +13,7 @@ export class PenToolbox {
   constructor(containerElement, scoreReader) {
     this.container = containerElement;
     this.reader = scoreReader;
-    this.isExpanded = false; // 默认收起为微型胶囊，给乐谱最大阅读空间
+    this.isExpanded = false;
     this.isStampPickerOpen = false;
 
     this.colors = [
@@ -25,6 +27,7 @@ export class PenToolbox {
 
     this.render();
     this.bindEvents();
+    this.initDraggable();
 
     appState.subscribe(() => {
       this.syncActiveState();
@@ -46,30 +49,19 @@ export class PenToolbox {
     this.reader.syncPenToolToRenderers();
   }
 
-  show() {
-    this.container.style.display = 'block';
-  }
-
-  hide() {
-    this.container.style.display = 'none';
-    appState.set({ isPenActive: false });
-    this.reader.syncPenToolToRenderers();
-  }
-
   render() {
     const activeTool = appState.get('activePenTool');
     const activeColor = appState.get('penColor');
 
     this.container.innerHTML = `
-      <div class="pen-toolbox ${this.isExpanded ? 'expanded' : 'collapsed'}">
-        <!-- 工具箱手柄 / 收起展开悬浮微型胶囊 -->
-        <button class="toolbox-toggle-btn" id="toolboxToggleBtn" title="展开/收起手写笔工具箱">
+      <div class="pen-toolbox ${this.isExpanded ? 'expanded' : 'collapsed'}" id="penToolboxWidget">
+        <!-- 半透明可移动手柄胶囊 -->
+        <button class="toolbox-toggle-btn draggable-pill" id="toolboxToggleBtn" title="按住可拖动位置，轻触展开批注">
           <span class="tool-icon">🖊️</span>
           <span class="pill-text">${this.isExpanded ? '收起批注' : '手写批注'}</span>
         </button>
 
         <div class="toolbox-content">
-          <!-- 顶部工具箱标题与收起按钮 -->
           <div class="toolbox-header-row">
             <span class="toolbox-title">✍️ 乐谱手写批注</span>
             <button class="toolbox-minimize-btn" id="toolboxMinimizeBtn" title="最小化到边缘">✕</button>
@@ -155,18 +147,76 @@ export class PenToolbox {
     `;
   }
 
-  bindEvents() {
-    // 展开/收起手柄
-    this.container.querySelector('#toolboxToggleBtn')?.addEventListener('click', () => {
-      this.toggle();
-    });
+  initDraggable() {
+    const pillBtn = this.container.querySelector('#toolboxToggleBtn');
+    const container = this.container;
 
-    // 最小化按钮
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let initialLeft = 0, initialTop = 0;
+    let hasMoved = false;
+
+    const onPointerDown = (e) => {
+      isDragging = true;
+      hasMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+
+      const rect = container.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+
+      // 切换为 fixed 绝对像素定位
+      container.style.bottom = 'auto';
+      container.style.right = 'auto';
+      container.style.left = `${initialLeft}px`;
+      container.style.top = `${initialTop}px`;
+
+      pillBtn.setPointerCapture(e.pointerId);
+    };
+
+    const onPointerMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        hasMoved = true;
+      }
+
+      let newLeft = initialLeft + dx;
+      let newTop = initialTop + dy;
+
+      // 限制在屏幕可视范围内
+      newLeft = Math.max(10, Math.min(newLeft, window.innerWidth - container.offsetWidth - 10));
+      newTop = Math.max(60, Math.min(newTop, window.innerHeight - container.offsetHeight - 10));
+
+      container.style.left = `${newLeft}px`;
+      container.style.top = `${newTop}px`;
+    };
+
+    const onPointerUp = (e) => {
+      if (!isDragging) return;
+      isDragging = false;
+      pillBtn.releasePointerCapture(e.pointerId);
+
+      // 如果只是轻点而不是拖拽，触发切换展开
+      if (!hasMoved) {
+        this.toggle();
+      }
+    };
+
+    pillBtn?.addEventListener('pointerdown', onPointerDown);
+    pillBtn?.addEventListener('pointermove', onPointerMove);
+    pillBtn?.addEventListener('pointerup', onPointerUp);
+    pillBtn?.addEventListener('pointercancel', onPointerUp);
+  }
+
+  bindEvents() {
     this.container.querySelector('#toolboxMinimizeBtn')?.addEventListener('click', () => {
       this.toggle(false);
     });
 
-    // 笔刷切换
     this.container.addEventListener('click', (e) => {
       const toolBtn = e.target.closest('.tool-btn');
       if (toolBtn) {
@@ -186,7 +236,6 @@ export class PenToolbox {
         this.reader.syncPenToolToRenderers();
       }
 
-      // 颜色切换
       const colorBtn = e.target.closest('.color-dot');
       if (colorBtn) {
         const color = colorBtn.dataset.color;
@@ -194,7 +243,6 @@ export class PenToolbox {
         this.reader.syncPenToolToRenderers();
       }
 
-      // 印章选择
       const stampItemBtn = e.target.closest('.stamp-item-btn');
       if (stampItemBtn) {
         const stampId = stampItemBtn.dataset.stampId;
@@ -212,14 +260,12 @@ export class PenToolbox {
       }
     });
 
-    // 粗细滑块
     this.container.querySelector('#strokeSizeSlider')?.addEventListener('input', (e) => {
       const size = parseInt(e.target.value, 10);
       appState.set({ penSize: size });
       this.reader.syncPenToolToRenderers();
     });
 
-    // 撤销 / 重做 / 清屏
     this.container.querySelector('#undoBtn')?.addEventListener('click', () => {
       this.reader.undoCurrentPage();
     });
