@@ -1,5 +1,5 @@
 /* ==========================================================================
-   LyraScore 乐谱阅读与专注模式视口样式 (一体化翻页胶囊 + 触控滑动缩放条)
+   LyraScore 乐谱阅读与专注模式视口样式 (内置专业节拍器 + 自动翻页 + 触控滑动缩放条)
    ========================================================================== */
 
 .score-viewer-layout {
@@ -54,7 +54,7 @@
   font-size: 14px;
   font-weight: 700;
   color: var(--text-primary);
-  max-width: 200px;
+  max-width: 180px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -68,7 +68,7 @@
 .topbar-center {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -193,13 +193,15 @@
   top: calc(100% + 8px);
   right: 0;
   width: 270px;
-  background-color: var(--bg-surface);
+  background-color: var(--bg-glass, rgba(255, 255, 255, 0.94));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-xl);
   padding: 14px;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   z-index: 90;
 }
 .topbar-flip-popover.open {
@@ -211,6 +213,228 @@
   justify-content: space-between;
   font-size: 12px;
   font-weight: 700;
+}
+
+/* ================= 顶部专业节拍器控件 ================= */
+.topbar-metronome-widget {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 2px 6px 2px 4px;
+  gap: 4px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+.topbar-metronome-widget.running {
+  border-color: var(--accent-primary, #1a56db);
+  box-shadow: 0 0 10px rgba(26, 86, 219, 0.25);
+  background-color: var(--accent-light, #e0e7ff);
+}
+.topbar-metronome-widget.beat-flash {
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
+  border-color: #ef4444;
+}
+
+.topbar-metro-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-full);
+}
+.topbar-metro-btn:hover {
+  background-color: var(--bg-surface);
+}
+.metro-play-icon {
+  font-size: 11px;
+  color: var(--accent-primary, #1a56db);
+}
+.metro-bpm-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.topbar-metro-gear-btn {
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.topbar-metro-popover {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -60px;
+  width: 290px;
+  background-color: var(--bg-glass, rgba(255, 255, 255, 0.94));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.2));
+  padding: 14px 16px;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 95;
+}
+.topbar-metro-popover.open {
+  display: flex;
+}
+.metro-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metro-beat-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+.beat-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--border-color, #e5e7eb);
+  border: 2px solid transparent;
+  transition: transform 0.08s ease, background-color 0.08s ease, box-shadow 0.08s ease;
+}
+.beat-dot.accent-dot {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.beat-dot.active {
+  background-color: #3b82f6;
+  transform: scale(1.3);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+}
+.beat-dot.active.accent {
+  background-color: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.9);
+}
+
+.metro-bpm-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.metro-step-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.metro-step-btn:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent-primary);
+}
+.metro-bpm-display-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.metro-bpm-number {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--accent-primary, #1a56db);
+  line-height: 1;
+}
+.metro-bpm-sub {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.metro-slider-row {
+  display: flex;
+  width: 100%;
+}
+.metro-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.metro-time-signatures {
+  display: flex;
+  gap: 4px;
+}
+.metro-sig-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.metro-sig-btn.active {
+  background: var(--accent-primary, #1a56db);
+  color: #ffffff;
+  border-color: var(--accent-primary, #1a56db);
+}
+.metro-tap-btn {
+  border: 1px dashed var(--accent-primary, #1a56db);
+  background: var(--accent-light, #e0e7ff);
+  color: var(--accent-primary, #1a56db);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.05s ease;
+}
+.metro-tap-btn:active {
+  transform: scale(0.92);
+}
+
+.metro-sound-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-color);
+}
+.metro-mute-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.metro-mute-btn.muted {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+.metro-vol-slider {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent-primary, #1a56db);
+  cursor: pointer;
 }
 
 .topbar-right {
@@ -306,7 +530,7 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* 核心阅读视口 (全权由 JS 手势引擎接管缩放与翻页) */
+/* 核心阅读视口 */
 .score-viewport-container {
   flex: 1;
   width: 100%;
@@ -356,7 +580,6 @@
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  transition: transform 0.1s ease-out;
 }
 
 .score-single-container, .score-double-container {
@@ -409,20 +632,20 @@
 }
 
 /* ================= 竖屏平板响应式优化 ================= */
-@media (max-width: 850px) {
+@media (max-width: 900px) {
   .reader-topbar {
     padding: 0 8px;
     gap: 4px;
   }
   .viewer-score-title {
-    max-width: 120px;
+    max-width: 110px;
     font-size: 13px;
   }
   .back-text {
     display: none;
   }
   .zoom-range-slider {
-    width: 55px;
+    width: 50px;
   }
   .topbar-flip-stepper {
     display: none;

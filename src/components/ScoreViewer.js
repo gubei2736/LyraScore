@@ -1,12 +1,13 @@
 /**
  * 乐谱阅读与专注模式主视图 (ScoreViewer Component)
- * 包含沉浸式视口、顶部控制条（内嵌触控滑动缩放条支持点击100%一键复位、一体化翻页控制与定时翻页）、单/双页排版与手写笔工具箱
+ * 包含沉浸式视口、顶部控制条（内嵌触控滑动缩放条、一体化翻页控制、自动翻页设置与内置专业节拍器）、单/双页排版与手写笔工具箱
  */
 
 import { ScoreReader } from '../core/reader.js';
 import { AutoFlipController } from '../core/autoFlip.js';
 import { PenToolbox } from './PenToolbox.js';
 import { FlipBar } from './FlipBar.js';
+import { Metronome } from './Metronome.js';
 import { appState, KEY_SIGNATURES } from '../core/state.js';
 import { wakeLockManager } from '../utils/wakeLock.js';
 
@@ -21,6 +22,7 @@ export class ScoreViewer {
     this.autoFlip = null;
     this.penToolbox = null;
     this.flipBar = null;
+    this.metronome = null;
     this.isStageMode = false;
     this.currentZoom = 1.0;
 
@@ -52,19 +54,22 @@ export class ScoreViewer {
           <div class="topbar-center">
             <!-- 一体化连贯翻页药丸胶囊 -->
             <div class="page-nav-segmented">
-              <button class="nav-segment-btn nav-btn-prev" id="prevPageBtn" title="上一页 (左踏板/PageUp/向下滑)">
+              <button class="nav-segment-btn nav-btn-prev" id="prevPageBtn" title="上一页">
                 ‹
               </button>
               <div class="page-indicator-badge" id="pageIndicator">
                 1 / 1
               </div>
-              <button class="nav-segment-btn nav-btn-next" id="nextPageBtn" title="下一页 (右踏板/PageDown/向上滑)">
+              <button class="nav-segment-btn nav-btn-next" id="nextPageBtn" title="下一页">
                 ›
               </button>
             </div>
 
-            <!-- 内嵌顶部工具栏的定时翻页控制器 -->
+            <!-- 内嵌顶部工具栏的自动翻页控制器 -->
             <div id="topbarFlipSlot"></div>
+
+            <!-- 内嵌顶部工具栏的内置专业节拍器 -->
+            <div id="topbarMetronomeSlot"></div>
           </div>
 
           <div class="topbar-right">
@@ -133,155 +138,117 @@ export class ScoreViewer {
     const penContainer = this.container.querySelector('#floatingPenContainer');
     this.penToolbox = new PenToolbox(penContainer, this.reader);
 
-    // 挂载顶部内嵌定时翻页控制器
+    // 挂载顶部内嵌自动翻页控制器
     const flipSlot = this.container.querySelector('#topbarFlipSlot');
     if (flipSlot) {
       this.flipBar = new FlipBar(flipSlot, this.autoFlip);
     }
+
+    // 挂载顶部内嵌专业节拍器
+    const metroSlot = this.container.querySelector('#topbarMetronomeSlot');
+    if (metroSlot) {
+      this.metronome = new Metronome(metroSlot);
+    }
+
+    // 挂载全局键盘快捷键
+    this.initKeyboardShortcuts();
   }
 
   initOrientationWatcher() {
     const checkOrientation = () => {
       const isLandscape = window.innerWidth > window.innerHeight;
-      const doubleBtn = this.container.querySelector('#btnDoublePage');
-
-      if (!isLandscape) {
-        if (doubleBtn) {
-          doubleBtn.disabled = true;
-          doubleBtn.classList.add('disabled-btn');
-          doubleBtn.title = '双页模式仅在横屏下可用';
-        }
-        this.reader.setLayoutMode('single');
-        this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
-          b.classList.toggle('active', b.dataset.layout === 'single');
-        });
-      } else {
-        if (doubleBtn) {
-          doubleBtn.disabled = false;
-          doubleBtn.classList.remove('disabled-btn');
-          doubleBtn.title = '双页并排模式';
+      const btnDouble = this.container.querySelector('#btnDoublePage');
+      if (btnDouble) {
+        if (!isLandscape) {
+          btnDouble.classList.add('disabled-btn');
+          btnDouble.setAttribute('title', '双页模式仅在横屏下可用');
+          if (appState.get('layoutMode') === 'double') {
+            this.reader.setLayoutMode('single');
+            this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
+              b.classList.toggle('active', b.dataset.layout === 'single');
+            });
+          }
+        } else {
+          btnDouble.classList.remove('disabled-btn');
+          btnDouble.setAttribute('title', '双页并排模式');
         }
       }
     };
 
     window.addEventListener('resize', checkOrientation);
-    checkOrientation();
-  }
-
-  setStageMode(active) {
-    this.isStageMode = active;
-    const topbar = this.container.querySelector('#readerTopbar');
-    const exitBtn = this.container.querySelector('#floatingExitStageBtn');
-    const penContainer = this.container.querySelector('#floatingPenContainer');
-
-    if (active) {
-      topbar?.classList.add('hidden-bar');
-      if (exitBtn) exitBtn.style.display = 'flex';
-      if (penContainer) penContainer.style.display = 'none';
-      wakeLockManager.request();
-    } else {
-      topbar?.classList.remove('hidden-bar');
-      if (exitBtn) exitBtn.style.display = 'none';
-      if (penContainer) penContainer.style.display = 'block';
-    }
-  }
-
-  closeViewer() {
-    this.setStageMode(false);
-    this.autoFlip.pause();
-    wakeLockManager.release();
-    if (this.penToolbox) {
-      this.penToolbox.toggle(false);
-    }
-    const penContainer = this.container.querySelector('#floatingPenContainer');
-    if (penContainer) {
-      penContainer.style.display = 'none';
-    }
+    window.addEventListener('orientationchange', checkOrientation);
+    setTimeout(checkOrientation, 100);
   }
 
   bindEvents() {
-    // 返回书架
     this.container.querySelector('#readerBackBtn')?.addEventListener('click', () => {
-      this.closeViewer();
+      this.exitStageMode();
+      this.autoFlip?.stop();
+      this.metronome?.destroy();
       this.onBackToLibrary();
     });
 
-    // 翻页按键
     this.container.querySelector('#prevPageBtn')?.addEventListener('click', () => {
-      this.reader.prevPage();
+      this.reader?.prevPage();
     });
     this.container.querySelector('#nextPageBtn')?.addEventListener('click', () => {
-      this.reader.nextPage();
+      this.reader?.nextPage();
     });
 
-    // 触控热区
     this.container.querySelector('#hotzoneLeft')?.addEventListener('click', () => {
-      this.reader.prevPage();
+      this.reader?.prevPage();
     });
     this.container.querySelector('#hotzoneRight')?.addEventListener('click', () => {
-      this.reader.nextPage();
+      this.reader?.nextPage();
     });
+
     this.container.querySelector('#hotzoneCenter')?.addEventListener('click', () => {
       if (this.isStageMode) {
-        const topbar = this.container.querySelector('#readerTopbar');
-        topbar?.classList.toggle('hidden-bar');
+        this.toggleStageTopBar();
       }
     });
 
-    // 顶部滑动缩放条拖动监听
-    const zoomSlider = this.container.querySelector('#zoomRangeSlider');
-    zoomSlider?.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value, 10);
-      this.currentZoom = val / 100;
-      this.reader.setZoom(this.currentZoom);
-    });
-
-    // 点击百分比一键复位为 100%
-    const zoomLabel = this.container.querySelector('#zoomLabel');
-    zoomLabel?.addEventListener('click', () => {
-      this.currentZoom = 1.0;
-      this.reader.setZoom(1.0);
+    // 触控滑动条缩放
+    const slider = this.container.querySelector('#zoomRangeSlider');
+    slider?.addEventListener('input', (e) => {
+      const pct = parseInt(e.target.value, 10);
+      const scale = pct / 100;
+      this.currentZoom = scale;
+      this.reader?.setZoom(scale);
       this.updateZoomLabel();
     });
 
-    // 排版模式切换
+    // 点击百分比一键复位 100%
+    this.container.querySelector('#zoomLabel')?.addEventListener('click', () => {
+      this.currentZoom = 1.0;
+      this.reader?.setZoom(1.0);
+      if (slider) slider.value = 100;
+      this.updateZoomLabel();
+    });
+
     this.container.querySelectorAll('.layout-toggle-group button').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (btn.disabled) return;
-        const layout = btn.dataset.layout;
-        this.reader.setLayoutMode(layout);
-        this.container.querySelectorAll('.layout-toggle-group button').forEach(b => b.classList.toggle('active', b === btn));
+        if (btn.classList.contains('disabled-btn')) return;
+        const mode = btn.dataset.layout;
+        this.reader?.setLayoutMode(mode);
+        this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
+          b.classList.toggle('active', b === btn);
+        });
       });
     });
 
-    // 主题切换
     this.container.querySelector('#themeCycleBtn')?.addEventListener('click', () => {
       const themes = ['parchment', 'dark', 'light'];
-      const cur = appState.get('theme') || 'parchment';
-      const next = themes[(themes.indexOf(cur) + 1) % themes.length];
-      appState.set({ theme: next });
+      const current = appState.get('theme');
+      const nextIndex = (themes.indexOf(current) + 1) % themes.length;
+      appState.set({ theme: themes[nextIndex] });
     });
 
-    // 进入专注模式
     this.container.querySelector('#stageModeBtn')?.addEventListener('click', () => {
-      this.setStageMode(true);
+      this.enterStageMode();
     });
-
-    // 退出专注模式
     this.container.querySelector('#floatingExitStageBtn')?.addEventListener('click', () => {
-      this.setStageMode(false);
-    });
-
-    // 键盘监听
-    window.addEventListener('keydown', (e) => {
-      if (appState.get('currentView') !== 'reader') return;
-      if (e.key === 'Escape' && this.isStageMode) {
-        this.setStageMode(false);
-      } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
-        this.reader.nextPage();
-      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-        this.reader.prevPage();
-      }
+      this.exitStageMode();
     });
   }
 
@@ -290,76 +257,113 @@ export class ScoreViewer {
     const slider = this.container.querySelector('#zoomRangeSlider');
     const pct = Math.round(this.currentZoom * 100);
     if (label) label.textContent = `${pct}%`;
-    if (slider && parseInt(slider.value, 10) !== pct) {
-      slider.value = pct;
+    if (slider) slider.value = pct;
+  }
+
+  initKeyboardShortcuts() {
+    window.addEventListener('keydown', (e) => {
+      if (appState.get('currentView') !== 'reader') return;
+
+      if (['PageDown', 'ArrowRight', 'ArrowDown'].includes(e.key)) {
+        e.preventDefault();
+        this.reader?.nextPage();
+      } else if (['PageUp', 'ArrowLeft', 'ArrowUp'].includes(e.key)) {
+        e.preventDefault();
+        this.reader?.prevPage();
+      } else if (e.key === ' ' && !e.target.matches('input, textarea')) {
+        e.preventDefault();
+        this.autoFlip?.toggle();
+      } else if (e.key === 'Escape') {
+        if (this.isStageMode) {
+          this.exitStageMode();
+        }
+      }
+    });
+  }
+
+  async openScore(score, initialPage = 0) {
+    appState.set({ currentView: 'reader' });
+    this.updateScoreMeta(score);
+
+    this.currentZoom = 1.0;
+    const slider = this.container.querySelector('#zoomRangeSlider');
+    if (slider) slider.value = 100;
+    this.updateZoomLabel();
+
+    await this.reader.loadScore(score, initialPage);
+  }
+
+  updateScoreMeta(score) {
+    const titleEl = this.container.querySelector('#viewerScoreTitle');
+    if (titleEl) {
+      titleEl.textContent = score.title || '未知乐谱';
+    }
+
+    const badgesRow = this.container.querySelector('#viewerBadgesRow');
+    if (badgesRow) {
+      let html = '';
+      if (score.composer) {
+        html += `<span class="badge badge-accent">${score.composer}</span>`;
+      }
+      if (score.keySignature) {
+        const keyInfo = KEY_SIGNATURES.find(k => k.id === score.keySignature);
+        if (keyInfo) {
+          html += `<span class="badge badge-gray">${keyInfo.name}</span>`;
+        }
+      }
+      badgesRow.innerHTML = html;
     }
   }
 
-  async openScore(score) {
-    this.setStageMode(false);
-    this.currentZoom = 1.0;
-    this.updateZoomLabel();
+  enterStageMode() {
+    this.isStageMode = true;
+    appState.set({ isStageMode: true });
 
-    const penContainer = this.container.querySelector('#floatingPenContainer');
-    if (penContainer) {
-      penContainer.style.display = 'block';
+    this.container.querySelector('#readerTopbar')?.classList.add('hidden-bar');
+    const exitBtn = this.container.querySelector('#floatingExitStageBtn');
+    if (exitBtn) exitBtn.style.display = 'flex';
+
+    wakeLockManager.request();
+
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
     }
+  }
 
-    const titleEl = this.container.querySelector('#viewerScoreTitle');
-    const badgesRow = this.container.querySelector('#viewerBadgesRow');
+  exitStageMode() {
+    this.isStageMode = false;
+    appState.set({ isStageMode: false });
 
-    if (titleEl) titleEl.textContent = score.title;
+    this.container.querySelector('#readerTopbar')?.classList.remove('hidden-bar');
+    const exitBtn = this.container.querySelector('#floatingExitStageBtn');
+    if (exitBtn) exitBtn.style.display = 'none';
 
-    if (badgesRow) {
-      const keyObj = KEY_SIGNATURES.find(k => k.id === score.keySignature);
-      badgesRow.innerHTML = `
-        <span class="meta-tag-pill">${score.format.toUpperCase()}</span>
-        ${keyObj ? `<span class="meta-key-badge">${keyObj.name.split(' (')[0]}</span>` : ''}
-        ${score.isCopy ? `<span class="card-copy-badge">副本: ${score.copyNote || ''}</span>` : ''}
-      `;
+    wakeLockManager.release();
+
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
     }
+  }
 
-    const isLandscape = window.innerWidth > window.innerHeight;
-    const initialMode = (isLandscape && (score.pageCount > 1 || score.format === 'pdf')) ? 'double' : 'single';
-    this.reader.setLayoutMode(initialMode);
-    this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
-      b.classList.toggle('active', b.dataset.layout === initialMode);
-    });
-
-    try {
-      await this.reader.loadScore(score);
-    } catch (err) {
-      console.error('加载乐谱失败:', err);
-      const stageEl = this.container.querySelector('#scorePagesStage');
-      if (stageEl) {
-        stageEl.innerHTML = `
-          <div style="padding: 60px 20px; text-align: center; color: #dc2626;">
-            <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
-            <h3>乐谱加载失败</h3>
-            <p style="color: #6b7280; margin: 12px 0;">${err.message || '文件可能损坏或格式不兼容'}</p>
-            <button onclick="location.reload()" class="btn btn-primary btn-sm">重新加载</button>
-          </div>
-        `;
-      }
+  toggleStageTopBar() {
+    const topbar = this.container.querySelector('#readerTopbar');
+    if (topbar) {
+      topbar.classList.toggle('hidden-bar');
     }
-
-    await wakeLockManager.request();
   }
 
   syncState() {
-    const cur = appState.get('currentPage') || 0;
-    const total = appState.get('totalPages') || 1;
-    const layout = appState.get('layoutMode');
+    const currentPage = appState.get('currentPage');
+    const totalPages = appState.get('totalPages');
 
-    const ind = this.container.querySelector('#pageIndicator');
-    if (ind) {
-      if (layout === 'double' && total > 1) {
-        const p1 = cur + 1;
-        const p2 = Math.min(total, cur + 2);
-        ind.textContent = `${p1}-${p2} / ${total}`;
-      } else {
-        ind.textContent = `${cur + 1} / ${total}`;
-      }
+    const indicator = this.container.querySelector('#pageIndicator');
+    if (indicator) {
+      indicator.textContent = `${currentPage + 1} / ${totalPages}`;
     }
+
+    const btnPrev = this.container.querySelector('#prevPageBtn');
+    const btnNext = this.container.querySelector('#nextPageBtn');
+    if (btnPrev) btnPrev.disabled = (currentPage === 0);
+    if (btnNext) btnNext.disabled = (currentPage >= totalPages - 1);
   }
 }

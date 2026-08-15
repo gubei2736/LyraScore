@@ -1,6 +1,6 @@
 /**
  * 顶部工具栏内嵌定时翻页控制器 (FlipBar Component)
- * 紧凑优雅地嵌入在阅读器顶部导航栏，告别谱面遮挡，包含倒计时动画与下拉设置弹窗
+ * 紧凑优雅地嵌入在阅读器顶部导航栏，包含倒计时动画与极简下拉设置弹窗
  */
 
 import { appState } from '../core/state.js';
@@ -32,7 +32,7 @@ export class FlipBar {
     this.container.innerHTML = `
       <div class="topbar-flip-widget ${isRunning ? 'running' : 'idle'}">
         <!-- 主播放/暂停按钮 -->
-        <button class="topbar-flip-play-btn" id="flipMainToggleBtn" title="${isRunning ? '暂停自动翻页 (空格键)' : '开始自动翻页 (空格键)'}">
+        <button class="topbar-flip-play-btn" id="flipMainToggleBtn" title="${isRunning ? '暂停自动翻页' : '开始自动翻页'}">
           <span class="flip-play-icon" id="flipCenterIcon">${isRunning ? '⏸' : '▶'}</span>
           <span class="flip-play-text" id="flipTimeCounter">
             ${mode === 'flip' ? `翻页 ${intervalSec}s` : `滚动 ${scrollSpeed}px`}
@@ -46,41 +46,33 @@ export class FlipBar {
         </div>
 
         <!-- 设置齿轮按钮 -->
-        <button class="topbar-flip-gear-btn" id="flipSettingsToggleBtn" title="自动翻页与踏板设置">
+        <button class="topbar-flip-gear-btn" id="flipSettingsToggleBtn" title="自动翻页设置">
           ⚙️
         </button>
 
-        <!-- 下拉设置面板 -->
+        <!-- 下拉设置面板 (纯净无外设干扰) -->
         <div class="topbar-flip-popover ${this.isSettingsOpen ? 'open' : ''}" id="flipSettingsPopover">
           <div class="flip-popover-header">
-            <span>⏱️ 自动翻谱与外设设置</span>
+            <span>⏱️ 自动翻页设置</span>
             <button class="stamp-close-btn" id="flipSettingsCloseBtn">✕</button>
           </div>
 
           <div class="setting-item">
-            <label class="setting-label">模式切换</label>
+            <label class="setting-label">翻页模式</label>
             <div class="segmented-control">
-              <button class="seg-btn ${mode === 'flip' ? 'active' : ''}" data-mode="flip">定时翻页</button>
-              <button class="seg-btn ${mode === 'scroll' ? 'active' : ''}" data-mode="scroll">平滑滚动</button>
+              <button class="seg-btn ${mode === 'flip' ? 'active' : ''}" data-mode="flip">定时整页</button>
+              <button class="seg-btn ${mode === 'scroll' ? 'active' : ''}" data-mode="scroll">匀速平滑滚动</button>
             </div>
           </div>
 
           <div class="setting-item ${mode === 'flip' ? '' : 'hidden'}" id="flipIntervalSection">
-            <label class="setting-label">单页停留时间: <strong id="intervalDisplay">${intervalSec}</strong> 秒</label>
+            <label class="setting-label">单页停留时长: <strong id="intervalDisplay">${intervalSec}</strong> 秒</label>
             <input type="range" class="size-slider" id="flipIntervalSlider" min="3" max="120" step="1" value="${intervalSec}">
           </div>
 
           <div class="setting-item ${mode === 'scroll' ? '' : 'hidden'}" id="scrollSpeedSection">
-            <label class="setting-label">平滑滚动速度: <strong id="speedDisplay">${scrollSpeed}</strong> px/s</label>
+            <label class="setting-label">平滑滚动速率: <strong id="speedDisplay">${scrollSpeed}</strong> px/s</label>
             <input type="range" class="size-slider" id="scrollSpeedSlider" min="10" max="150" step="5" value="${scrollSpeed}">
-          </div>
-
-          <div class="pedal-tip-box">
-            <div class="tip-title">🎹 蓝牙脚踏板 / 键盘支持</div>
-            <div class="tip-content">
-              • <strong>右踏板 / PageDown / 空格</strong>: 下一页 / 翻页暂停<br>
-              • <strong>左踏板 / PageUp</strong>: 上一页
-            </div>
           </div>
         </div>
       </div>
