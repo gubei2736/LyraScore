@@ -1,6 +1,6 @@
 /**
  * 乐谱阅读器调度中心 (ScoreReader Core)
- * 具备防循环闪烁保护、手势穿透、全局捕获双指平滑 Pinch-to-Zoom 缩放与双向手势翻页引擎
+ * 具备防循环闪烁保护、手势穿透、全局捕获双指平滑 Pinch-to-Zoom 缩放与实时手势诊断引擎
  */
 
 import { PdfScoreRenderer } from '../renderers/pdfRenderer.js';
@@ -9,6 +9,7 @@ import { ImageScoreRenderer } from '../renderers/imgRenderer.js';
 import { StrokeRenderer } from './penEngine/strokeRenderer.js';
 import { scoreDB } from './db.js';
 import { appState } from './state.js';
+import { gestureDiagnostics } from './gestureDiagnostics.js';
 
 export class ScoreReader {
   constructor(viewportContainerElement) {
@@ -64,19 +65,30 @@ export class ScoreReader {
       if (appState.get('currentView') !== 'reader') return;
       if (appState.get('isPenActive')) return; // 手写笔模式下绘制优先
 
-      // 检测到双指触碰
-      if (e.touches.length >= 2) {
+      const touchCount = e.touches.length;
+      console.log(`[Lyra-Touch] touchstart: touches=${touchCount}`);
+
+      // 检测到双指或多指触碰
+      if (touchCount >= 2) {
         isMultiTouch = true;
         isSwiping = false;
         initialDistance = getDistance(e.touches[0], e.touches[1]);
         initialScale = this.zoomScale;
         this.container.style.transition = 'none';
+
+        gestureDiagnostics.update({
+          touchCount,
+          initialDist: initialDistance,
+          currentDist: initialDistance,
+          scale: this.zoomScale,
+          state: '双指缩放就绪',
+          target: e.target?.className || e.target?.tagName
+        }, e.touches);
         return;
       }
 
       // 单指触碰
-      if (e.touches.length === 1) {
-        // 确保单指事件发生在阅读区视口内
+      if (touchCount === 1) {
         const target = e.target;
         if (!this.viewportEl?.contains(target)) return;
 
@@ -88,6 +100,15 @@ export class ScoreReader {
         currentX = startX;
         currentY = startY;
         this.container.style.transition = 'none';
+
+        gestureDiagnostics.update({
+          touchCount: 1,
+          initialDist: 0,
+          currentDist: 0,
+          scale: this.zoomScale,
+          state: '单指触摸',
+          target: target.className || target.tagName
+        }, e.touches);
       }
     }, { passive: false });
 
@@ -95,8 +116,10 @@ export class ScoreReader {
       if (appState.get('currentView') !== 'reader') return;
       if (appState.get('isPenActive')) return;
 
-      // 1. 双指 Pinch-to-Zoom 动态缩放 (高优先级无缝接管)
-      if (e.touches.length >= 2) {
+      const touchCount = e.touches.length;
+
+      // 1. 双指 Pinch-to-Zoom 动态缩放
+      if (touchCount >= 2) {
         if (!isMultiTouch || initialDistance <= 0) {
           isMultiTouch = true;
           isSwiping = false;
@@ -115,19 +138,40 @@ export class ScoreReader {
           this.zoomScale = targetScale;
           this.container.style.transform = `scale(${targetScale})`;
           this.container.style.transformOrigin = 'top center';
+
           if (this.onZoomChange) {
             this.onZoomChange(this.zoomScale);
           }
+
+          console.log(`[Lyra-Touch] PinchZoom: dist=${Math.round(currentDist)}, ratio=${ratio.toFixed(2)}, scale=${targetScale.toFixed(2)}`);
+
+          gestureDiagnostics.update({
+            touchCount,
+            initialDist: initialDistance,
+            currentDist,
+            scale: targetScale,
+            state: '双指缩放中',
+            target: e.target?.className || e.target?.tagName
+          }, e.touches);
         }
         return;
       }
 
       // 2. 单指滑动手势阻尼位移
-      if (isSwiping && e.touches.length === 1) {
+      if (isSwiping && touchCount === 1) {
         currentX = e.touches[0].clientX;
         currentY = e.touches[0].clientY;
         const deltaX = currentX - startX;
         const deltaY = currentY - startY;
+
+        gestureDiagnostics.update({
+          touchCount: 1,
+          initialDist: 0,
+          currentDist: Math.round(Math.hypot(deltaX, deltaY)),
+          scale: this.zoomScale,
+          state: `单指滑动 (dx:${Math.round(deltaX)}, dy:${Math.round(deltaY)})`,
+          target: e.target?.className || e.target?.tagName
+        }, e.touches);
 
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
           if (Math.abs(deltaX) > 12) {
@@ -147,8 +191,16 @@ export class ScoreReader {
       if (appState.get('currentView') !== 'reader') return;
       if (appState.get('isPenActive')) return;
 
+      const remainingTouches = e.touches.length;
+      console.log(`[Lyra-Touch] touchend: remaining=${remainingTouches}`);
+
+      gestureDiagnostics.update({
+        touchCount: remainingTouches,
+        state: remainingTouches > 0 ? '抬起一指' : '已松手'
+      }, e.touches);
+
       if (isMultiTouch) {
-        if (e.touches.length < 2) {
+        if (remainingTouches < 2) {
           isMultiTouch = false;
           initialDistance = 0;
           if (this.onZoomChange) {
@@ -158,7 +210,7 @@ export class ScoreReader {
         return;
       }
 
-      if (isSwiping && e.touches.length === 0) {
+      if (isSwiping && remainingTouches === 0) {
         isSwiping = false;
         const deltaX = currentX - startX;
         const deltaY = currentY - startY;
