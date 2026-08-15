@@ -3,8 +3,9 @@
  * 具备：
  * 1. 极致半透明水晶毛玻璃悬浮胶囊
  * 2. 全屏自由拖拽任意移动位置
- * 3. 智能视口边界避让算法 + 原始锚点精准记忆还原
- * 4. 接入现代高保真确认对话框，彻底告别早期安卓原生弹窗
+ * 3. 屏幕旋转与视口自适应边界钳位 (横竖屏切换100%始终在屏幕可见范围内)
+ * 4. 纯汉字操作按钮：撤销 / 回退 / 清空
+ * 5. 接入现代高保真确认对话框
  */
 
 import { MUSICAL_STAMPS } from '../core/penEngine/stamps.js';
@@ -34,10 +35,40 @@ export class PenToolbox {
     this.render();
     this.bindEvents();
     this.initDraggable();
+    this.initOrientationWatcher();
 
     appState.subscribe(() => {
       this.syncActiveState();
     });
+  }
+
+  initOrientationWatcher() {
+    window.addEventListener('resize', () => {
+      this.clampToViewport();
+    });
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => this.clampToViewport(), 150);
+    });
+  }
+
+  clampToViewport() {
+    const maxLeft = Math.max(8, window.innerWidth - (this.isExpanded ? 350 : 76));
+    const maxTop = Math.max(56, window.innerHeight - (this.isExpanded ? 240 : 56));
+
+    let curLeft = this.userAnchorLeft !== null ? this.userAnchorLeft : (window.innerWidth - 90);
+    let curTop = this.userAnchorTop !== null ? this.userAnchorTop : (window.innerHeight - 100);
+
+    curLeft = Math.min(Math.max(8, curLeft), maxLeft);
+    curTop = Math.min(Math.max(56, curTop), maxTop);
+
+    this.userAnchorLeft = curLeft;
+    this.userAnchorTop = curTop;
+
+    if (this.isExpanded) {
+      this.adjustPositionForExpandedPanel();
+    } else {
+      this.restoreUserAnchorPosition();
+    }
   }
 
   toggle(visible) {
@@ -100,8 +131,13 @@ export class PenToolbox {
 
   restoreUserAnchorPosition() {
     if (this.userAnchorLeft !== null && this.userAnchorTop !== null) {
-      this.container.style.left = `${Math.round(this.userAnchorLeft)}px`;
-      this.container.style.top = `${Math.round(this.userAnchorTop)}px`;
+      const maxLeft = Math.max(8, window.innerWidth - 76);
+      const maxTop = Math.max(56, window.innerHeight - 56);
+      const safeLeft = Math.min(Math.max(8, this.userAnchorLeft), maxLeft);
+      const safeTop = Math.min(Math.max(56, this.userAnchorTop), maxTop);
+
+      this.container.style.left = `${Math.round(safeLeft)}px`;
+      this.container.style.top = `${Math.round(safeTop)}px`;
       this.container.style.right = 'auto';
       this.container.style.bottom = 'auto';
     }
@@ -169,18 +205,15 @@ export class PenToolbox {
 
           <div class="tool-divider"></div>
 
-          <!-- 历史撤销与清屏 -->
+          <!-- 历史撤销、回退与清屏 (纯汉字无图标) -->
           <div class="history-group">
             <button class="action-btn" id="undoBtn" title="撤销笔迹">
-              <span class="tool-icon">↩️</span>
               <span>撤销</span>
             </button>
-            <button class="action-btn" id="redoBtn" title="重做笔迹">
-              <span class="tool-icon">↪️</span>
-              <span>重做</span>
+            <button class="action-btn" id="redoBtn" title="回退恢复笔迹">
+              <span>回退</span>
             </button>
             <button class="action-btn btn-clear-danger" id="clearBtn" title="清空本页全部笔迹">
-              <span class="tool-icon">🗑️</span>
               <span>清空</span>
             </button>
           </div>
@@ -331,7 +364,6 @@ export class PenToolbox {
       this.reader.redoCurrentPage();
     });
 
-    // 采用现代确认对话框替代原生 confirm
     this.container.querySelector('#clearBtn')?.addEventListener('click', async () => {
       const confirmed = await showConfirmDialog({
         title: '清空当前页批注',
