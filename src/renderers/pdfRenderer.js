@@ -1,25 +1,23 @@
 /**
  * PDF 乐谱渲染引擎 (基于 Mozilla PDF.js)
- * 采用原生二进制流解码，杜绝 Base64 编码损坏，支持自适应高清 DPR 光栅化渲染
+ * 采用打包构建的本地独立 Worker 线程，彻底解决 GlobalWorkerOptions.workerSrc 缺失问题
  */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.js?url';
 
-// 禁用外部 Worker 网络请求，使用稳定可靠的主线程内联解析
+// 绑定本地打包的 Worker 脚本相对路径
 if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 }
 
 export class PdfScoreRenderer {
   constructor() {
     this.pdfDoc = null;
     this.pageCache = new Map();
-    this.activeRenderTasks = new Map(); // pageNum => renderTask
+    this.activeRenderTasks = new Map();
   }
 
-  /**
-   * 安全转换各类数据为 Uint8Array
-   */
   static toUint8Array(data) {
     if (!data) return null;
     if (data instanceof Uint8Array) return data;
@@ -31,7 +29,6 @@ export class PdfScoreRenderer {
       if (data.includes(',')) {
         base64 = data.split(',')[1];
       }
-      // 清除可能存在的换行符与空格
       base64 = base64.replace(/[\r\n\s]/g, '');
       const binaryStr = atob(base64);
       const len = binaryStr.length;
@@ -53,7 +50,6 @@ export class PdfScoreRenderer {
     }
 
     try {
-      // 复制一份独立的 ArrayBuffer 副本传递给 PDF.js
       const copyData = new Uint8Array(uint8.buffer.slice(uint8.byteOffset, uint8.byteOffset + uint8.byteLength));
       const loadingTask = pdfjsLib.getDocument({
         data: copyData,
@@ -76,18 +72,11 @@ export class PdfScoreRenderer {
     return this.pdfDoc ? this.pdfDoc.numPages : 0;
   }
 
-  /**
-   * 渲染指定页码到 targetCanvas
-   * @param {number} pageNum 1-based
-   * @param {HTMLCanvasElement} canvas
-   * @param {number} containerWidth 目标显示宽度
-   */
   async renderPage(pageNum, canvas, containerWidth = 800) {
     if (!this.pdfDoc || pageNum < 1 || pageNum > this.pdfDoc.numPages || !canvas) {
       return null;
     }
 
-    // 取消正在进行的同一 Canvas 渲染任务
     if (this.activeRenderTasks.has(pageNum)) {
       try {
         this.activeRenderTasks.get(pageNum).cancel();
@@ -99,7 +88,6 @@ export class PdfScoreRenderer {
       const page = await this.pdfDoc.getPage(pageNum);
       const unscaledViewport = page.getViewport({ scale: 1.0 });
 
-      // 计算安全视口宽度（根据容器实际宽度与屏幕宽度综合取优）
       const safeWidth = Math.max(containerWidth || 800, 360);
       const baseScale = safeWidth / (unscaledViewport.width || 595);
       const dpr = Math.min(window.devicePixelRatio || 2.0, 2.5);
@@ -109,14 +97,12 @@ export class PdfScoreRenderer {
       const displayWidth = Math.floor(viewport.width / dpr);
       const displayHeight = Math.floor(viewport.height / dpr);
 
-      // 设置物理像素与 CSS 显示像素
       canvas.width = Math.floor(viewport.width);
       canvas.height = Math.floor(viewport.height);
       canvas.style.width = `${displayWidth}px`;
       canvas.style.height = `${displayHeight}px`;
 
       const ctx = canvas.getContext('2d', { alpha: false });
-      // 预填纯白背景，避免透明背景显示为黑色/白板
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -142,7 +128,6 @@ export class PdfScoreRenderer {
         return null;
       }
       console.error(`渲染 PDF 第 ${pageNum} 页失败:`, err);
-      // 在 Canvas 上绘制醒目的错误提示
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.fillStyle = '#fef2f2';
@@ -155,9 +140,6 @@ export class PdfScoreRenderer {
     }
   }
 
-  /**
-   * 生成封面缩略图 DataURL
-   */
   async generateThumbnail(maxWidth = 300) {
     if (!this.pdfDoc) return null;
     try {
