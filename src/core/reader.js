@@ -534,8 +534,6 @@ export class ScoreReader {
     const size = appState.get('penSize');
     const stamp = appState.get('currentStamp');
 
-    console.log(`[Reader] syncPenToolToRenderers -> tool:${tool}, size:${size}px, color:${color}, renderersCount:${this.strokeRenderers.size}, isPenActive:${isPenActive}`);
-
     for (const [pageIndex, sr] of this.strokeRenderers.entries()) {
       sr.canvas.style.pointerEvents = isPenActive ? 'auto' : 'none';
       sr.canvas.style.touchAction = isPenActive ? 'none' : 'auto';

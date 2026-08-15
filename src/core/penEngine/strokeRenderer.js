@@ -52,7 +52,6 @@ export class StrokeRenderer {
 
   setBrush(config) {
     this.brush = { ...this.brush, ...config };
-    console.log(`[StrokeRenderer] setBrush updated -> tool:${this.brush.tool}, color:${this.brush.color}, size:${this.brush.size}`);
   }
 
   resizeToParent(width, height) {
@@ -229,8 +228,6 @@ export class StrokeRenderer {
       start: { taper: isFountain ? 0.15 : 0 },
       end:   { taper: isFountain ? 0.20 : 0 }
     };
-
-    console.log(`[StrokeRenderer] drawCurrentLive -> tool:${tool}, brushSize:${this.brush.size}, calcSize:${strokeOptions.size}, points:${pointsToRender.length}`);
 
     const outline = getStroke(pointsToRender, strokeOptions);
     const compOp = isHighlighter ? 'multiply' : 'source-over';

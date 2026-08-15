@@ -45,8 +45,6 @@ export class PenToolbox {
     appState.subscribe(() => {
       this.syncActiveState();
     });
-
-    console.log('[PenToolbox] Initialized successfully with Metronome-style architecture.');
   }
 
   initOrientationWatcher() {
@@ -122,7 +120,6 @@ export class PenToolbox {
     // 手写批注模式始终保持激活，与面板展开/收起状态完全解耦
     appState.set({ isPenActive: true });
     this.reader.syncPenToolToRenderers();
-    console.log(`[PenToolbox] toggle -> isExpanded:${this.isExpanded}, isPenActive:true, currentTool:${appState.get('activePenTool')}, size:${appState.get('penSize')}`);
   }
 
   /**
@@ -379,7 +376,6 @@ export class PenToolbox {
       const toolBtn = e.target.closest('.tool-btn');
       if (toolBtn) {
         const tool = toolBtn.dataset.tool;
-        console.log(`[PenToolbox] tool selected: ${tool}`);
         if (tool === 'stamp') {
           this.isStampPickerOpen = !this.isStampPickerOpen;
           this.container.querySelector('#stampPopover')?.classList.toggle('open', this.isStampPickerOpen);
@@ -397,7 +393,6 @@ export class PenToolbox {
       const colorBtn = e.target.closest('.color-dot');
       if (colorBtn) {
         const color = colorBtn.dataset.color;
-        console.log(`[PenToolbox] color selected: ${color}`);
         appState.set({ penColor: color });
         this.reader.syncPenToolToRenderers();
       }
@@ -407,7 +402,6 @@ export class PenToolbox {
         const stampId = stampItemBtn.dataset.stampId;
         const stampObj = MUSICAL_STAMPS.find(s => s.id === stampId);
         if (stampObj) {
-          console.log(`[PenToolbox] stamp selected: ${stampObj.name}`);
           appState.set({ activePenTool: 'stamp', currentStamp: stampObj, isPenActive: true });
           this.isStampPickerOpen = false;
           this.container.querySelector('#stampPopover')?.classList.remove('open');
@@ -425,7 +419,6 @@ export class PenToolbox {
       const sizeText = this.container.querySelector('#penSizeValueText');
       if (sizeText) sizeText.textContent = `${clamped} px`;
       this.reader.syncPenToolToRenderers();
-      console.log(`[PenToolbox] penSize updated -> ${clamped} px (activeTool:${appState.get('activePenTool')})`);
     };
 
     slider?.addEventListener('input', (e) => {
@@ -445,19 +438,16 @@ export class PenToolbox {
     // 4. 撤销 / 回退 / 清空
     this.container.querySelector('#undoBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      console.log('[PenToolbox] undo triggered');
       this.reader.undoCurrentPage();
     });
 
     this.container.querySelector('#redoBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      console.log('[PenToolbox] redo triggered');
       this.reader.redoCurrentPage();
     });
 
     this.container.querySelector('#clearBtn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
-      console.log('[PenToolbox] clear confirmation opened');
       const confirmed = await showConfirmDialog({
         title: '清空当前页批注',
         message: '确认清空当前页的所有手写笔迹吗？此操作无法撤销。',
@@ -466,7 +456,6 @@ export class PenToolbox {
         isDanger: true
       });
       if (confirmed) {
-        console.log('[PenToolbox] clear confirmed for page', this.reader.currentPage);
         this.reader.clearCurrentPage();
       }
     });
