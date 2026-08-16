@@ -127,15 +127,21 @@ export class ScoreReader {
 
   initDualChannelGestures() {
     const activePointers = new Map();
-    let initialPinchDistance = 0;
-    let initialPinchScale = 1.0;
     let isPinching = false;
-
-    let swipeStartX = 0, swipeStartY = 0;
-    let swipeCurrentX = 0, swipeCurrentY = 0;
+    let initialPinchDistance = 0;
+    let initialPinchScale = 1;
     let isSwiping = false;
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let swipeCurrentX = 0;
+    let swipeCurrentY = 0;
+    let scrollStartTop = 0;
 
-    const getDistance = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    const getDistance = (p1, p2) => {
+      const dx = p1.x - p2.x;
+      const dy = p1.y - p2.y;
+      return Math.hypot(dx, dy);
+    };
 
     const onPointerDown = (e) => {
       if (appState.get('currentView') !== 'reader') return;
@@ -144,7 +150,7 @@ export class ScoreReader {
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       const count = activePointers.size;
 
-      if (count >= 2) {
+      if (count === 2) {
         isPinching = true;
         isSwiping = false;
         this.enableGpuLayer();
@@ -162,6 +168,9 @@ export class ScoreReader {
         swipeStartY = e.clientY;
         swipeCurrentX = swipeStartX;
         swipeCurrentY = swipeStartY;
+        if (this.viewportEl) {
+          scrollStartTop = this.viewportEl.scrollTop;
+        }
         if (this.layoutMode !== 'scroll') {
           this.container.style.transition = 'none';
         }
@@ -206,7 +215,14 @@ export class ScoreReader {
         return;
       }
 
-      // 2. 单指滑动手势阻尼位移 (仅在非连续滚动模式下执行翻页预判阻尼)
+      // 2. 连续滚动模式 (scroll)：直接接管视口上下滑动，确保手势绝对顺滑且永不卡死
+      if (isSwiping && count === 1 && this.layoutMode === 'scroll' && this.viewportEl) {
+        const deltaY = e.clientY - swipeStartY;
+        this.viewportEl.scrollTop = Math.max(0, scrollStartTop - deltaY);
+        return;
+      }
+
+      // 3. 单页/双页模式：单指滑动阻尼位移
       if (isSwiping && count === 1 && this.layoutMode !== 'scroll') {
         swipeCurrentX = e.clientX;
         swipeCurrentY = e.clientY;
@@ -494,10 +510,10 @@ export class ScoreReader {
           // 竖屏单页：左右撑满视口，最大化放大乐谱音符与细节
           pageWidth = Math.max(340, vpWidth - 16);
         } else {
-          // 横屏单页：以视口可用高度为基准自适应，确保整页乐谱从头到尾 100% 完整可见
-          const availableHeight = Math.max(300, vpHeight - 24);
+          // 横屏单页：乐谱高度占视口可用高度的 65% (舒适演奏视距与优雅呼吸感留白)
+          const availableHeight = Math.max(260, Math.floor((vpHeight - 24) * 0.65));
           const idealWidthByHeight = Math.floor(availableHeight * 0.707); // 乐谱 A4 标准黄金比例
-          pageWidth = Math.min(Math.max(idealWidthByHeight, 360), vpWidth - 32);
+          pageWidth = Math.min(Math.max(idealWidthByHeight, 260), vpWidth - 32);
         }
 
         const pageEl = await this.createPageElement(this.currentPage, pageWidth);

@@ -76,18 +76,25 @@ export class AutoFlipController {
     this.loop();
   }
 
-  pause() {
+  pause(snapToPage = true) {
     this.isRunning = false;
     appState.set({ isAutoFlipping: false });
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+
+    // 智能磁吸对齐：停止平滑滚动时，自动平滑就位到当前主要阅读页的顶部
+    if (this.mode === 'scroll' && snapToPage && this.reader) {
+      setTimeout(() => {
+        this.reader.scrollToPage(this.reader.currentPage, true);
+      }, 40);
+    }
   }
 
   toggle() {
     if (this.isRunning) {
-      this.pause();
+      this.pause(true);
     } else {
       this.start();
     }
