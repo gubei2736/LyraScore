@@ -225,8 +225,11 @@ export class ScoreLibrary {
     const mainEl = this.container.querySelector('.library-main');
 
     mainEl?.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropzone?.classList.add('active');
+      const isFileDrag = e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+      if (isFileDrag) {
+        e.preventDefault();
+        dropzone?.classList.add('active');
+      }
     });
     mainEl?.addEventListener('dragleave', (e) => {
       if (!mainEl.contains(e.relatedTarget)) {
@@ -236,7 +239,7 @@ export class ScoreLibrary {
     mainEl?.addEventListener('drop', async (e) => {
       e.preventDefault();
       dropzone?.classList.remove('active');
-      const files = Array.from(e.dataTransfer.files || []);
+      const files = Array.from(e.dataTransfer?.files || []);
       if (files.length > 0) {
         await this.handleImportFiles(files);
       }
@@ -368,20 +371,22 @@ export class ScoreLibrary {
               `).join('')}
             </div>
 
-            <!-- 卡片操作按钮：纯汉字 开始阅读 / 副本 / 编辑 / 删除 -->
+            <!-- 卡片操作按钮：纯汉字 [开始阅读] + [副本 / 编辑 / 删除] (两行防挤压设计) -->
             <div class="card-actions">
-              <button class="btn btn-sm btn-primary action-open-btn" data-action="open">
+              <button class="btn btn-sm btn-primary action-open-btn" data-action="open" title="立即打开乐谱开始演奏与批注">
                 开始阅读
               </button>
-              <button class="btn btn-sm btn-outline" data-action="copy" title="创建独立练习/手写笔记副本">
-                副本
-              </button>
-              <button class="btn btn-sm btn-ghost action-edit-btn" data-action="edit" title="编辑乐谱信息">
-                编辑
-              </button>
-              <button class="btn btn-sm btn-ghost action-delete-btn" data-action="delete" title="删除乐谱">
-                删除
-              </button>
+              <div class="card-actions-sub-row">
+                <button class="btn btn-xs btn-outline action-copy-btn" data-action="copy" title="创建独立练习/手写笔记副本">
+                  副本
+                </button>
+                <button class="btn btn-xs btn-ghost action-edit-btn" data-action="edit" title="编辑乐谱信息">
+                  编辑
+                </button>
+                <button class="btn btn-xs btn-ghost action-delete-btn" data-action="delete" title="删除乐谱">
+                  删除
+                </button>
+              </div>
             </div>
           </div>
         </div>

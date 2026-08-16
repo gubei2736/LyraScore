@@ -206,25 +206,25 @@ export class ScoreReader {
         return;
       }
 
-      // 2. 单指滑动手势阻尼位移 (连续滚动模式下放行原生垂直滚动)
-      if (isSwiping && count === 1 && !appState.get('isPenActive') && this.layoutMode !== 'scroll') {
+      // 2. 单指滑动手势阻尼位移 (仅在非连续滚动模式下执行翻页预判阻尼)
+      if (isSwiping && count === 1 && this.layoutMode !== 'scroll') {
         swipeCurrentX = e.clientX;
         swipeCurrentY = e.clientY;
         const deltaX = swipeCurrentX - swipeStartX;
         const deltaY = swipeCurrentY - swipeStartY;
 
-        if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+        if (Math.abs(deltaX) > 6 || Math.abs(deltaY) > 6) {
           this.enableGpuLayer();
         }
 
         if (Math.abs(deltaX) > Math.abs(deltaY)) {
-          if (Math.abs(deltaX) > 12) {
-            const dampedX = deltaX * 0.32;
+          if (Math.abs(deltaX) > 8) {
+            const dampedX = deltaX * 0.35;
             this.container.style.transform = `scale(${this.zoomScale}) translateX(${dampedX}px)`;
           }
         } else {
-          if (Math.abs(deltaY) > 12) {
-            const dampedY = deltaY * 0.32;
+          if (Math.abs(deltaY) > 8) {
+            const dampedY = deltaY * 0.35;
             this.container.style.transform = `scale(${this.zoomScale}) translateY(${dampedY}px)`;
           }
         }
@@ -248,15 +248,15 @@ export class ScoreReader {
         return;
       }
 
-      if (isSwiping && remainingCount === 0 && !appState.get('isPenActive') && this.layoutMode !== 'scroll') {
+      if (isSwiping && remainingCount === 0 && this.layoutMode !== 'scroll') {
         isSwiping = false;
         const deltaX = swipeCurrentX - swipeStartX;
         const deltaY = swipeCurrentY - swipeStartY;
-        const threshold = 45;
+        const threshold = 30; // 降低阈值，提升轻扫翻页灵敏度
 
         this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
 
-        // 横向滑动手势
+        // 横向滑动手势 (左滑下一页，右滑上一页)
         if (Math.abs(deltaX) >= Math.abs(deltaY)) {
           if (deltaX < -threshold) {
             this.container.style.transform = `scale(${this.zoomScale}) translateX(-70px)`;
@@ -278,7 +278,7 @@ export class ScoreReader {
             return;
           }
         } 
-        // 垂直滑动手势
+        // 垂直滑动手势 (上滑下一页，下滑上一页)
         else {
           if (deltaY < -threshold) {
             this.container.style.transform = `scale(${this.zoomScale}) translateY(-70px)`;
