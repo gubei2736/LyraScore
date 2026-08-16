@@ -3,6 +3,12 @@ $ErrorActionPreference = "Continue"
 $androidDir  = "G:\Project\android"
 $projectRoot = "G:\Project"
 
+# 注入 Public_Environment 工具链路径到 PATH
+$nodeDir = "D:\Public_Environment\Node\nvm\v20.18.0"
+if (Test-Path $nodeDir) {
+    $env:PATH = "$nodeDir;$env:PATH"
+}
+
 # Toolchain absolute paths
 $androidJar     = "D:\Public_Environment\AndroidSDK\platforms\android-34\android.jar"
 $aapt2          = "D:\Public_Environment\AndroidSDK\build-tools\34.0.0\aapt2.exe"

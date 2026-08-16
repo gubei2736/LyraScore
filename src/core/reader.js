@@ -29,9 +29,51 @@ export class ScoreReader {
 
     this.gpuReleaseTimer = null;
     this.idlePrerenderHandle = null;
+    this.scrollObserverHandle = null;
 
     this.initSmoothOrientationListener();
     this.initDualChannelGestures();
+    this.initViewportScrollWatcher();
+  }
+
+  /**
+   * 监听连续滚动视口位置，动态同步顶部页码指示器 (如 3 / 10)
+   */
+  initViewportScrollWatcher() {
+    if (!this.viewportEl) return;
+
+    this.viewportEl.addEventListener('scroll', () => {
+      if (this.layoutMode !== 'scroll' || !this.currentScore || this.isRendering) return;
+
+      if (this.scrollObserverHandle) return;
+      this.scrollObserverHandle = requestAnimationFrame(() => {
+        this.scrollObserverHandle = null;
+        const pageWrappers = this.container.querySelectorAll('.score-page-wrapper');
+        if (!pageWrappers.length) return;
+
+        const viewportCenter = this.viewportEl.scrollTop + this.viewportEl.clientHeight * 0.45;
+        let bestPage = 0;
+        let minDistance = Infinity;
+
+        pageWrappers.forEach((el) => {
+          const pIdx = parseInt(el.dataset.pageIndex, 10);
+          const top = el.offsetTop;
+          const height = el.offsetHeight;
+          const center = top + height / 2;
+          const dist = Math.abs(viewportCenter - center);
+
+          if (dist < minDistance) {
+            minDistance = dist;
+            bestPage = pIdx;
+          }
+        });
+
+        if (bestPage !== this.currentPage && bestPage >= 0 && bestPage < this.totalPages) {
+          this.currentPage = bestPage;
+          appState.set({ currentPage: bestPage });
+        }
+      });
+    }, { passive: true });
   }
 
   /**
@@ -47,7 +89,7 @@ export class ScoreReader {
       if (Math.abs(currentWidth - this.lastRenderedWidth) < 20) return;
 
       // 1. 瞬时几何平滑过渡：利用 CSS transform 在 0ms 瞬间顺滑贴合新宽度，消除呆滞空白
-      if (this.lastRenderedWidth > 0 && currentWidth > 0) {
+      if (this.lastRenderedWidth > 0 && currentWidth > 0 && this.layoutMode !== 'scroll') {
         const ratio = currentWidth / this.lastRenderedWidth;
         this.container.style.transition = 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
         this.container.style.transform = `scale(${this.zoomScale * ratio})`;
@@ -120,7 +162,9 @@ export class ScoreReader {
         swipeStartY = e.clientY;
         swipeCurrentX = swipeStartX;
         swipeCurrentY = swipeStartY;
-        this.container.style.transition = 'none';
+        if (this.layoutMode !== 'scroll') {
+          this.container.style.transition = 'none';
+        }
       }
     };
 
@@ -162,8 +206,8 @@ export class ScoreReader {
         return;
       }
 
-      // 2. 单指滑动手势阻尼位移
-      if (isSwiping && count === 1 && !appState.get('isPenActive')) {
+      // 2. 单指滑动手势阻尼位移 (连续滚动模式下放行原生垂直滚动)
+      if (isSwiping && count === 1 && !appState.get('isPenActive') && this.layoutMode !== 'scroll') {
         swipeCurrentX = e.clientX;
         swipeCurrentY = e.clientY;
         const deltaX = swipeCurrentX - swipeStartX;
@@ -204,7 +248,7 @@ export class ScoreReader {
         return;
       }
 
-      if (isSwiping && remainingCount === 0 && !appState.get('isPenActive')) {
+      if (isSwiping && remainingCount === 0 && !appState.get('isPenActive') && this.layoutMode !== 'scroll') {
         isSwiping = false;
         const deltaX = swipeCurrentX - swipeStartX;
         const deltaY = swipeCurrentY - swipeStartY;
@@ -257,16 +301,16 @@ export class ScoreReader {
           }
         }
 
-        // 未达阈值回弹
+        // 未达到阈值，弹性复位
         this.container.style.transform = `scale(${this.zoomScale}) translate(0, 0)`;
-        this.scheduleGpuLayerRelease(250);
+        this.scheduleGpuLayerRelease(200);
       }
     };
 
-    window.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
-    window.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
-    window.addEventListener('pointerup', onPointerUp, { capture: true, passive: true });
-    window.addEventListener('pointercancel', onPointerUp, { capture: true, passive: true });
+    window.addEventListener('pointerdown', onPointerDown, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointerup', onPointerUp, { passive: true });
+    window.addEventListener('pointercancel', onPointerUp, { passive: true });
   }
 
   setZoom(scale) {
@@ -378,8 +422,20 @@ export class ScoreReader {
         return;
       }
 
-      // PDF 与 图片乐谱渲染 (单页 / 双页)
-      if (mode === 'double' && this.totalPages > 1) {
+      // 连续纵向流式排版 (Scroll Mode)
+      if (mode === 'scroll') {
+        const scrollContainer = document.createElement('div');
+        scrollContainer.className = 'score-scroll-container';
+
+        const pageWidth = Math.min(containerWidth, 980);
+        for (let i = 0; i < this.totalPages; i++) {
+          const pageEl = await this.createPageElement(i, pageWidth);
+          if (pageEl) scrollContainer.appendChild(pageEl);
+        }
+        newStage.appendChild(scrollContainer);
+      } 
+      // PDF 与 图片乐谱渲染 (双页模式)
+      else if (mode === 'double' && this.totalPages > 1) {
         const doubleContainer = document.createElement('div');
         doubleContainer.className = 'score-double-container';
 
@@ -411,10 +467,34 @@ export class ScoreReader {
       this.applyNewStage(newStage, smoothTransition);
       this.syncPenToolToRenderers();
 
+      // 在连续滚动模式下，自动平滑就位到当前页
+      if (mode === 'scroll' && this.currentPage > 0) {
+        setTimeout(() => {
+          this.scrollToPage(this.currentPage, false);
+        }, 30);
+      }
+
       // 在当前页光栅化完毕后，利用系统空闲时间触发相邻页离屏预加载
-      this.scheduleIdlePrerender(containerWidth);
+      if (mode !== 'scroll') {
+        this.scheduleIdlePrerender(containerWidth);
+      }
     } finally {
       this.isRendering = false;
+    }
+  }
+
+  /**
+   * 连续滚动模式下平滑滚动到指定页面
+   */
+  scrollToPage(pageIndex, smooth = true) {
+    if (this.layoutMode !== 'scroll' || !this.viewportEl) return;
+    const pageWrapper = this.container.querySelector(`.score-page-wrapper[data-page-index="${pageIndex}"]`);
+    if (pageWrapper) {
+      const targetTop = pageWrapper.offsetTop - 16;
+      this.viewportEl.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: smooth ? 'smooth' : 'auto'
+      });
     }
   }
 
@@ -542,6 +622,16 @@ export class ScoreReader {
   }
 
   async nextPage() {
+    if (this.layoutMode === 'scroll') {
+      if (this.currentPage + 1 < this.totalPages) {
+        this.currentPage += 1;
+        appState.set({ currentPage: this.currentPage });
+        this.scrollToPage(this.currentPage, true);
+        return true;
+      }
+      return false;
+    }
+
     const step = (this.layoutMode === 'double' && this.totalPages > 1) ? 2 : 1;
     if (this.currentPage + step < this.totalPages) {
       this.currentPage += step;
@@ -553,6 +643,16 @@ export class ScoreReader {
   }
 
   async prevPage() {
+    if (this.layoutMode === 'scroll') {
+      if (this.currentPage - 1 >= 0) {
+        this.currentPage -= 1;
+        appState.set({ currentPage: this.currentPage });
+        this.scrollToPage(this.currentPage, true);
+        return true;
+      }
+      return false;
+    }
+
     const step = (this.layoutMode === 'double' && this.totalPages > 1) ? 2 : 1;
     if (this.currentPage - step >= 0) {
       this.currentPage = Math.max(0, this.currentPage - step);
@@ -567,14 +667,19 @@ export class ScoreReader {
     if (pageIndex >= 0 && pageIndex < this.totalPages) {
       this.currentPage = pageIndex;
       appState.set({ currentPage: this.currentPage });
-      await this.renderCurrentLayout(false);
+      if (this.layoutMode === 'scroll') {
+        this.scrollToPage(this.currentPage, true);
+      } else {
+        await this.renderCurrentLayout(false);
+      }
       return true;
     }
     return false;
   }
 
   setLayoutMode(mode) {
-    if (['single', 'double'].includes(mode)) {
+    if (['single', 'double', 'scroll'].includes(mode)) {
+      if (this.layoutMode === mode) return;
       this.layoutMode = mode;
       appState.set({ layoutMode: mode });
       this.renderCurrentLayout(true);

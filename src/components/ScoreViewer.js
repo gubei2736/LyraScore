@@ -79,10 +79,11 @@ export class ScoreViewer {
               <span class="zoom-pct-display" id="zoomLabel" title="点击一键复位为 100%">100%</span>
             </div>
 
-            <!-- 排版模式切换 (仅单页/双页，竖屏仅单页) -->
+            <!-- 排版模式切换 (单页 / 双页 / 连续滚动) -->
             <div class="layout-toggle-group">
               <button class="icon-toggle-btn active" data-layout="single" title="单页模式">📄</button>
               <button class="icon-toggle-btn" data-layout="double" id="btnDoublePage" title="双页并排模式 (仅横屏可用)">📖</button>
+              <button class="icon-toggle-btn" data-layout="scroll" id="btnScrollPage" title="连续纵向滚动模式">📜</button>
             </div>
 
             <!-- 主题切换 (纯汉字无图标) -->
@@ -384,5 +385,10 @@ export class ScoreViewer {
     const btnNext = this.container.querySelector('#nextPageBtn');
     if (btnPrev) btnPrev.disabled = (currentPage === 0);
     if (btnNext) btnNext.disabled = (currentPage >= totalPages - 1);
+
+    const layoutMode = appState.get('layoutMode') || 'single';
+    this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
+      b.classList.toggle('active', b.dataset.layout === layoutMode);
+    });
   }
 }

@@ -21,6 +21,8 @@ export class AutoFlipController {
     this.lastTickTime = 0;
     this.rafId = null;
 
+    this.accumulatedScrollPx = 0; // 累加未取整像素，保证极慢速也能极致顺滑
+
     // 回调通知
     this.onProgress = () => {}; // progress (0~1), remainingSec
 
@@ -30,6 +32,17 @@ export class AutoFlipController {
   setMode(mode) {
     this.mode = mode;
     appState.set({ autoFlipMode: mode });
+
+    if (mode === 'scroll') {
+      if (this.reader && this.reader.layoutMode !== 'scroll') {
+        this.reader.setLayoutMode('scroll');
+      }
+    } else if (mode === 'flip') {
+      if (this.reader && this.reader.layoutMode === 'scroll') {
+        const isLandscape = window.innerWidth > window.innerHeight;
+        this.reader.setLayoutMode(isLandscape ? 'double' : 'single');
+      }
+    }
   }
 
   setIntervalSec(sec) {
@@ -50,9 +63,15 @@ export class AutoFlipController {
     this.isRunning = true;
     appState.set({ isAutoFlipping: true });
 
-    if (this.mode === 'flip') {
+    if (this.mode === 'scroll') {
+      if (this.reader && this.reader.layoutMode !== 'scroll') {
+        this.reader.setLayoutMode('scroll');
+      }
+      this.accumulatedScrollPx = 0;
+    } else if (this.mode === 'flip') {
       this.resetTimer();
     }
+
     this.lastTickTime = performance.now();
     this.loop();
   }
@@ -83,7 +102,7 @@ export class AutoFlipController {
     if (!this.isRunning) return;
 
     const now = performance.now();
-    const dt = (now - this.lastTickTime) / 1000; // 秒数差
+    const dt = Math.min((now - this.lastTickTime) / 1000, 0.1); // 秒数差 (防止切换后台时突跳)
     this.lastTickTime = now;
 
     if (this.mode === 'flip') {
@@ -107,13 +126,20 @@ export class AutoFlipController {
         });
       }
     } else if (this.mode === 'scroll') {
-      // 平滑滚动模式
+      // 连续平滑滚动模式
       if (this.scrollEl) {
         const deltaPx = this.scrollSpeed * dt;
-        this.scrollEl.scrollTop += deltaPx;
+        this.accumulatedScrollPx += deltaPx;
 
-        // 判断是否到达底部
-        if (this.scrollEl.scrollTop + this.scrollEl.clientHeight >= this.scrollEl.scrollHeight - 5) {
+        // 当累积量大于等于 0.5 像素时执行滚动，兼顾高刷新率与亚像素精度
+        if (Math.abs(this.accumulatedScrollPx) >= 0.5) {
+          this.scrollEl.scrollTop += this.accumulatedScrollPx;
+          this.accumulatedScrollPx = 0;
+        }
+
+        // 判断是否到达乐谱底部
+        const isAtBottom = this.scrollEl.scrollTop + this.scrollEl.clientHeight >= this.scrollEl.scrollHeight - 4;
+        if (isAtBottom && this.scrollEl.scrollHeight > this.scrollEl.clientHeight + 10) {
           this.pause();
         }
       }
