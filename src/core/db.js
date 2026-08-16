@@ -122,6 +122,29 @@ class ScoreDatabase {
     });
   }
 
+  async deleteScores(ids = []) {
+    if (!ids || ids.length === 0) return true;
+    const db = await this.ready();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(['scores', 'annotations'], 'readwrite');
+      const scoreStore = tx.objectStore('scores');
+      const annStore = tx.objectStore('annotations');
+      const annIndex = annStore.index('scoreId');
+
+      for (const id of ids) {
+        scoreStore.delete(id);
+        const req = annIndex.getAllKeys(id);
+        req.onsuccess = () => {
+          const keys = req.result || [];
+          keys.forEach(k => annStore.delete(k));
+        };
+      }
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
   /**
    * 创建乐谱副本 (Fork / Clone Score)
    * 副本继承原谱的乐谱数据，但拥有独立的 ID、独立的笔迹与版本说明

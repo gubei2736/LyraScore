@@ -26,6 +26,10 @@ export class ScoreLibrary {
     this.onlyFavorites = false;
     this.isSidebarCollapsed = localStorage.getItem('lyra_sidebar_collapsed') === 'true';
 
+    // 多选与批量管理状态
+    this.isBatchMode = false;
+    this.selectedScoreIds = new Set();
+
     this.render();
     this.loadScores();
   }
@@ -45,6 +49,59 @@ export class ScoreLibrary {
     localStorage.setItem('lyra_sidebar_collapsed', this.isSidebarCollapsed);
     const sidebar = this.container.querySelector('#librarySidebar');
     sidebar?.classList.toggle('collapsed', this.isSidebarCollapsed);
+  }
+
+  enterBatchMode(initialScoreId = null) {
+    this.isBatchMode = true;
+    this.selectedScoreIds.clear();
+    if (initialScoreId) {
+      this.selectedScoreIds.add(initialScoreId);
+    }
+    this.updateBatchHeader();
+    this.renderScoreGrid();
+  }
+
+  exitBatchMode() {
+    this.isBatchMode = false;
+    this.selectedScoreIds.clear();
+    this.updateBatchHeader();
+    this.renderScoreGrid();
+  }
+
+  toggleSelectScore(scoreId) {
+    if (this.selectedScoreIds.has(scoreId)) {
+      this.selectedScoreIds.delete(scoreId);
+    } else {
+      this.selectedScoreIds.add(scoreId);
+    }
+    this.updateBatchHeader();
+    this.renderScoreGrid();
+  }
+
+  updateBatchHeader() {
+    const normalHeader = this.container.querySelector('#normalLibraryHeader');
+    const batchHeader = this.container.querySelector('#batchLibraryHeader');
+    const batchCountLabel = this.container.querySelector('#batchCountLabel');
+    const btnBatchDelete = this.container.querySelector('#btnBatchDelete');
+    const btnSelectAll = this.container.querySelector('#btnBatchSelectAll');
+
+    if (normalHeader && batchHeader) {
+      normalHeader.style.display = this.isBatchMode ? 'none' : 'flex';
+      batchHeader.style.display = this.isBatchMode ? 'flex' : 'none';
+    }
+
+    const count = this.selectedScoreIds.size;
+    if (batchCountLabel) {
+      batchCountLabel.textContent = `已选择 ${count} 首乐谱`;
+    }
+    if (btnBatchDelete) {
+      btnBatchDelete.disabled = (count === 0);
+      btnBatchDelete.innerHTML = `<span>🗑️</span> 批量删除 (${count})`;
+    }
+    if (btnSelectAll) {
+      const isAllSelected = this.scores.length > 0 && count === this.scores.length;
+      btnSelectAll.textContent = isAllSelected ? '取消全选' : '全选';
+    }
   }
 
   render() {
@@ -119,8 +176,8 @@ export class ScoreLibrary {
 
         <!-- 主内容区：搜索、过滤与书架网格 -->
         <main class="library-main">
-          <!-- 顶部搜索与过滤条 -->
-          <header class="library-header">
+          <!-- 常规顶部搜索与过滤条 -->
+          <header class="library-header" id="normalLibraryHeader">
             <!-- 展开/收起侧边栏汉堡按钮 -->
             <button class="sidebar-expand-btn" id="btnExpandSidebar" title="展开/收起侧边栏">
               ☰
@@ -137,6 +194,29 @@ export class ScoreLibrary {
               <button class="filter-pill ${this.selectedFormat === 'pdf' ? 'active' : ''}" data-format="pdf">PDF</button>
               <button class="filter-pill ${this.selectedFormat === 'xml' ? 'active' : ''}" data-format="xml">MusicXML</button>
               <button class="filter-pill ${this.selectedFormat === 'image' ? 'active' : ''}" data-format="image">图片</button>
+            </div>
+
+            <!-- 批量管理入口按钮 -->
+            <button class="btn btn-sm btn-outline batch-entry-btn" id="btnEnterBatchMode" title="进入多选批量管理模式">
+              <span>☑️</span> 批量管理
+            </button>
+          </header>
+
+          <!-- 批量多选管理悬浮操作条 -->
+          <header class="library-header batch-action-header" id="batchLibraryHeader" style="display: none;">
+            <div class="batch-header-left">
+              <button class="btn btn-sm btn-ghost batch-cancel-btn" id="btnBatchCancel">
+                ✕ 取消
+              </button>
+              <span class="batch-count-badge" id="batchCountLabel">已选择 0 首乐谱</span>
+            </div>
+            <div class="batch-header-right">
+              <button class="btn btn-sm btn-outline" id="btnBatchSelectAll">
+                全选
+              </button>
+              <button class="btn btn-sm btn-danger action-batch-delete-btn" id="btnBatchDelete" disabled>
+                <span>🗑️</span> 批量删除 (0)
+              </button>
             </div>
           </header>
 
@@ -245,6 +325,43 @@ export class ScoreLibrary {
       }
     });
 
+    this.container.querySelector('#btnEnterBatchMode')?.addEventListener('click', () => {
+      this.enterBatchMode();
+    });
+
+    this.container.querySelector('#btnBatchCancel')?.addEventListener('click', () => {
+      this.exitBatchMode();
+    });
+
+    this.container.querySelector('#btnBatchSelectAll')?.addEventListener('click', () => {
+      if (this.selectedScoreIds.size === this.scores.length) {
+        this.selectedScoreIds.clear();
+      } else {
+        this.scores.forEach(s => this.selectedScoreIds.add(s.id));
+      }
+      this.updateBatchHeader();
+      this.renderScoreGrid();
+    });
+
+    this.container.querySelector('#btnBatchDelete')?.addEventListener('click', async () => {
+      const count = this.selectedScoreIds.size;
+      if (count === 0) return;
+
+      const confirmed = await showConfirmDialog({
+        title: '批量删除乐谱',
+        message: `确定要永久删除选中的 ${count} 首乐谱吗？关联的所有手写批注与练习笔记也将被同步移除。此操作不可恢复。`,
+        confirmText: `确认删除 (${count})`,
+        cancelText: '取消',
+        isDanger: true
+      });
+
+      if (confirmed) {
+        await scoreDB.deleteScores(Array.from(this.selectedScoreIds));
+        this.exitBatchMode();
+        await this.loadScores();
+      }
+    });
+
     this.container.querySelectorAll('.theme-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const theme = btn.dataset.theme;
@@ -334,9 +451,17 @@ export class ScoreLibrary {
       const keyObj = KEY_SIGNATURES.find(k => k.id === s.keySignature);
       const keyLabel = keyObj ? keyObj.name.split(' (')[0] : '';
       const formatBadge = s.format.toUpperCase();
+      const isSelected = this.selectedScoreIds.has(s.id);
 
       return `
-        <div class="score-card ${s.isCopy ? 'is-copy-card' : ''}" data-score-id="${s.id}">
+        <div class="score-card ${s.isCopy ? 'is-copy-card' : ''} ${this.isBatchMode ? 'batch-mode' : ''} ${isSelected ? 'batch-selected' : ''}" data-score-id="${s.id}">
+          <!-- 多选复选框标记 -->
+          ${this.isBatchMode ? `
+            <div class="batch-checkbox ${isSelected ? 'checked' : ''}">
+              <span>${isSelected ? '✓' : ''}</span>
+            </div>
+          ` : ''}
+
           <div class="card-cover-box">
             ${s.coverUrl ? `
               <img class="card-cover-img" src="${s.coverUrl}" alt="封面">
@@ -349,9 +474,11 @@ export class ScoreLibrary {
 
             <span class="badge-format badge-${s.format}">${formatBadge}</span>
 
-            <button class="favorite-star-btn ${s.isFavorite ? 'favorited' : ''}" data-action="toggle-fav" title="收藏">
-              ${s.isFavorite ? '★' : '☆'}
-            </button>
+            ${!this.isBatchMode ? `
+              <button class="favorite-star-btn ${s.isFavorite ? 'favorited' : ''}" data-action="toggle-fav" title="收藏">
+                ${s.isFavorite ? '★' : '☆'}
+              </button>
+            ` : ''}
           </div>
 
           <div class="card-info">
@@ -371,23 +498,29 @@ export class ScoreLibrary {
               `).join('')}
             </div>
 
-            <!-- 卡片操作按钮：纯汉字 [开始阅读] + [副本 / 编辑 / 删除] (两行防挤压设计) -->
-            <div class="card-actions">
-              <button class="btn btn-sm btn-primary action-open-btn" data-action="open" title="立即打开乐谱开始演奏与批注">
-                开始阅读
-              </button>
-              <div class="card-actions-sub-row">
-                <button class="btn btn-xs btn-outline action-copy-btn" data-action="copy" title="创建独立练习/手写笔记副本">
-                  副本
+            <!-- 卡片操作按钮：纯汉字 [开始阅读] + [副本 / 编辑 / 删除] (多选模式下沉浸隐藏) -->
+            ${!this.isBatchMode ? `
+              <div class="card-actions">
+                <button class="btn btn-sm btn-primary action-open-btn" data-action="open" title="立即打开乐谱开始演奏与批注">
+                  开始阅读
                 </button>
-                <button class="btn btn-xs btn-ghost action-edit-btn" data-action="edit" title="编辑乐谱信息">
-                  编辑
-                </button>
-                <button class="btn btn-xs btn-ghost action-delete-btn" data-action="delete" title="删除乐谱">
-                  删除
-                </button>
+                <div class="card-actions-sub-row">
+                  <button class="btn btn-xs btn-outline action-copy-btn" data-action="copy" title="创建独立练习/手写笔记副本">
+                    副本
+                  </button>
+                  <button class="btn btn-xs btn-ghost action-edit-btn" data-action="edit" title="编辑乐谱信息">
+                    编辑
+                  </button>
+                  <button class="btn btn-xs btn-ghost action-delete-btn" data-action="delete" title="删除乐谱">
+                    删除
+                  </button>
+                </div>
               </div>
-            </div>
+            ` : `
+              <div class="card-actions batch-card-select-tip">
+                <span class="batch-select-text">${isSelected ? '已选中该乐谱' : '点击选择'}</span>
+              </div>
+            `}
           </div>
         </div>
       `;
@@ -398,6 +531,54 @@ export class ScoreLibrary {
       const score = this.scores.find(s => s.id === scoreId);
       if (!score) return;
 
+      // 1. 多选模式下：点击卡片任何区域均执行选中/取消
+      if (this.isBatchMode) {
+        card.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.toggleSelectScore(score.id);
+        });
+        return;
+      }
+
+      // 2. 常规模式下：绑定长按监听器 (450ms 触发长按进入多选模式)
+      let longPressTimer = null;
+      let startX = 0, startY = 0;
+
+      card.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return; // 点击卡片内操作按钮不触发长按
+        startX = e.clientX;
+        startY = e.clientY;
+        longPressTimer = setTimeout(() => {
+          if (navigator.vibrate) {
+            try { navigator.vibrate(40); } catch (_) {}
+          }
+          this.enterBatchMode(score.id);
+        }, 450);
+      });
+
+      card.addEventListener('pointermove', (e) => {
+        if (longPressTimer && (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      card.addEventListener('pointerup', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      card.addEventListener('pointercancel', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+
+      // 3. 常规模式下点击卡片或操作按钮
       card.querySelector('[data-action="open"]')?.addEventListener('click', () => {
         this.onOpenScore(score);
       });
