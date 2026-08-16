@@ -463,18 +463,18 @@ export class ScoreReader {
         return;
       }
 
-      // 1. 连续纵向流式排版 (Scroll Mode) 智能自适应
+      // 统一单页乐谱尺寸 (定时整页翻页模式与匀速平滑滚动完全一致)
+      const standardPageWidth = isLandscape 
+        ? Math.min(vpWidth - 32, 1150) 
+        : Math.max(340, vpWidth - 16);
+
+      // 1. 连续纵向流式排版 (Scroll Mode / 匀速平滑滚动)
       if (mode === 'scroll') {
         const scrollContainer = document.createElement('div');
         scrollContainer.className = 'score-scroll-container';
 
-        // 竖屏撑满屏幕宽度，横屏居中自适应
-        const pageWidth = isLandscape 
-          ? Math.min(vpWidth - 32, 1150) 
-          : Math.max(340, vpWidth - 16);
-
         for (let i = 0; i < this.totalPages; i++) {
-          const pageEl = await this.createPageElement(i, pageWidth);
+          const pageEl = await this.createPageElement(i, standardPageWidth);
           if (pageEl) scrollContainer.appendChild(pageEl);
         }
         newStage.appendChild(scrollContainer);
@@ -500,23 +500,12 @@ export class ScoreReader {
 
         newStage.appendChild(doubleContainer);
       } 
-      // 3. 单页排版 (Single Mode) 智能自适应最佳填充
+      // 3. 单页排版 (Single Mode / 定时整页翻页)
       else {
         const singleContainer = document.createElement('div');
         singleContainer.className = 'score-single-container';
 
-        let pageWidth;
-        if (!isLandscape) {
-          // 竖屏单页：左右撑满视口，最大化放大乐谱音符与细节
-          pageWidth = Math.max(340, vpWidth - 16);
-        } else {
-          // 横屏单页：乐谱高度占视口可用高度的 65% (舒适演奏视距与优雅呼吸感留白)
-          const availableHeight = Math.max(260, Math.floor((vpHeight - 24) * 0.65));
-          const idealWidthByHeight = Math.floor(availableHeight * 0.707); // 乐谱 A4 标准黄金比例
-          pageWidth = Math.min(Math.max(idealWidthByHeight, 260), vpWidth - 32);
-        }
-
-        const pageEl = await this.createPageElement(this.currentPage, pageWidth);
+        const pageEl = await this.createPageElement(this.currentPage, standardPageWidth);
         if (pageEl) singleContainer.appendChild(pageEl);
         newStage.appendChild(singleContainer);
       }
