@@ -776,9 +776,9 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 16px 0 80px 0;
+  padding: 8px 0 60px 0;
   -webkit-overflow-scrolling: touch;
-  touch-action: none;
+  touch-action: pan-y;
 }
 
 /* 触控翻页微型热区 */
@@ -806,14 +806,14 @@
   cursor: pointer;
 }
 
-/* 页面排版舞台 */
+/* 页面排版舞台 (全屏自适应无黑边填充) */
 .score-pages-stage {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
 }
 .score-pages-stage.gpu-accelerated-layer {
@@ -826,7 +826,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
 }
 

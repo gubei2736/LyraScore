@@ -376,7 +376,8 @@ export class ScoreReader {
 
     try {
       const vpWidth = this.viewportEl?.clientWidth || window.innerWidth;
-      const containerWidth = Math.max(vpWidth - 32, 600);
+      const vpHeight = this.viewportEl?.clientHeight || window.innerHeight;
+      const isLandscape = vpWidth > vpHeight;
       this.lastRenderedWidth = vpWidth;
       const mode = this.layoutMode;
 
@@ -422,26 +423,32 @@ export class ScoreReader {
         return;
       }
 
-      // 连续纵向流式排版 (Scroll Mode)
+      // 1. 连续纵向流式排版 (Scroll Mode) 智能自适应
       if (mode === 'scroll') {
         const scrollContainer = document.createElement('div');
         scrollContainer.className = 'score-scroll-container';
 
-        const pageWidth = Math.min(containerWidth, 980);
+        // 竖屏撑满屏幕宽度，横屏居中自适应
+        const pageWidth = isLandscape 
+          ? Math.min(vpWidth - 32, 1150) 
+          : Math.max(340, vpWidth - 16);
+
         for (let i = 0; i < this.totalPages; i++) {
           const pageEl = await this.createPageElement(i, pageWidth);
           if (pageEl) scrollContainer.appendChild(pageEl);
         }
         newStage.appendChild(scrollContainer);
       } 
-      // PDF 与 图片乐谱渲染 (双页模式)
+      // 2. 双页并排排版 (Double Mode) 智能自适应
       else if (mode === 'double' && this.totalPages > 1) {
         const doubleContainer = document.createElement('div');
         doubleContainer.className = 'score-double-container';
 
         const leftPageIndex = this.currentPage % 2 === 0 ? this.currentPage : this.currentPage - 1;
         const rightPageIndex = leftPageIndex + 1;
-        const pageWidth = Math.floor((containerWidth - 32) / 2);
+        
+        // 横屏双页平分视口宽度，精准贴合
+        const pageWidth = Math.max(340, Math.floor((vpWidth - 36) / 2));
 
         const leftPageEl = await this.createPageElement(leftPageIndex, pageWidth);
         if (leftPageEl) doubleContainer.appendChild(leftPageEl);
@@ -452,12 +459,22 @@ export class ScoreReader {
         }
 
         newStage.appendChild(doubleContainer);
-      } else {
-        // 单页模式
+      } 
+      // 3. 单页排版 (Single Mode) 智能自适应最佳填充
+      else {
         const singleContainer = document.createElement('div');
         singleContainer.className = 'score-single-container';
 
-        const pageWidth = Math.min(containerWidth, 980);
+        let pageWidth;
+        if (!isLandscape) {
+          // 竖屏单页：左右撑满视口，最大化放大乐谱音符与细节
+          pageWidth = Math.max(340, vpWidth - 16);
+        } else {
+          // 横屏单页：按视口可用高度与宽高比最佳填充，保证整页全景清晰展现
+          const idealWidthByHeight = Math.floor((vpHeight - 20) * 0.73);
+          pageWidth = Math.min(Math.max(idealWidthByHeight, 680), vpWidth - 32);
+        }
+
         const pageEl = await this.createPageElement(this.currentPage, pageWidth);
         if (pageEl) singleContainer.appendChild(pageEl);
         newStage.appendChild(singleContainer);
