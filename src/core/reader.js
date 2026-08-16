@@ -252,12 +252,16 @@ export class ScoreReader {
         isSwiping = false;
         const deltaX = swipeCurrentX - swipeStartX;
         const deltaY = swipeCurrentY - swipeStartY;
-        const threshold = 30; // 降低阈值，提升轻扫翻页灵敏度
+        const threshold = 30; // 轻扫灵敏度阈值
 
-        this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
+        const vp = this.viewportEl;
+        const isScrollable = vp && (vp.scrollHeight > vp.clientHeight + 15);
+        const isAtBottom = vp ? (vp.scrollTop + vp.clientHeight >= vp.scrollHeight - 15) : true;
+        const isAtTop = vp ? (vp.scrollTop <= 15) : true;
 
-        // 横向滑动手势 (左滑下一页，右滑上一页)
+        // 横向滑动手势：纯粹的整页翻页 (左滑下一页，右滑上一页)
         if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+          this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
           if (deltaX < -threshold) {
             this.container.style.transform = `scale(${this.zoomScale}) translateX(-70px)`;
             setTimeout(async () => {
@@ -278,26 +282,46 @@ export class ScoreReader {
             return;
           }
         } 
-        // 垂直滑动手势 (上滑下一页，下滑上一页)
+        // 垂直滑动手势：智能滚动与触底/到顶分段翻页
         else {
           if (deltaY < -threshold) {
-            this.container.style.transform = `scale(${this.zoomScale}) translateY(-70px)`;
-            setTimeout(async () => {
-              await this.nextPage();
-              this.container.style.transition = 'none';
-              this.container.style.transform = `scale(${this.zoomScale}) translateY(0)`;
-              this.scheduleGpuLayerRelease(150);
-            }, 140);
-            return;
+            // 手指向上推 (想查看下方内容)
+            if (isScrollable && !isAtBottom) {
+              // 1. 如果当前页面未触底，先平滑滚动显示下半页
+              const scrollStep = Math.min(vp.clientHeight * 0.65, vp.scrollHeight - vp.scrollTop - vp.clientHeight);
+              vp.scrollBy({ top: scrollStep, behavior: 'smooth' });
+              return;
+            } else {
+              // 2. 如果已经到达底部或不可滚动，触发翻到下一页
+              this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
+              this.container.style.transform = `scale(${this.zoomScale}) translateY(-70px)`;
+              setTimeout(async () => {
+                await this.nextPage();
+                this.container.style.transition = 'none';
+                this.container.style.transform = `scale(${this.zoomScale}) translateY(0)`;
+                this.scheduleGpuLayerRelease(150);
+              }, 140);
+              return;
+            }
           } else if (deltaY > threshold) {
-            this.container.style.transform = `scale(${this.zoomScale}) translateY(70px)`;
-            setTimeout(async () => {
-              await this.prevPage();
-              this.container.style.transition = 'none';
-              this.container.style.transform = `scale(${this.zoomScale}) translateY(0)`;
-              this.scheduleGpuLayerRelease(150);
-            }, 140);
-            return;
+            // 手指向下拉 (想查看上方内容)
+            if (isScrollable && !isAtTop) {
+              // 1. 如果当前页面未到顶，先平滑向上滚动显示上半页
+              const scrollStep = Math.min(vp.clientHeight * 0.65, vp.scrollTop);
+              vp.scrollBy({ top: -scrollStep, behavior: 'smooth' });
+              return;
+            } else {
+              // 2. 如果已经在顶部或不可滚动，触发翻到上一页
+              this.container.style.transition = 'transform 0.22s cubic-bezier(0.25, 1, 0.5, 1)';
+              this.container.style.transform = `scale(${this.zoomScale}) translateY(70px)`;
+              setTimeout(async () => {
+                await this.prevPage();
+                this.container.style.transition = 'none';
+                this.container.style.transform = `scale(${this.zoomScale}) translateY(0)`;
+                this.scheduleGpuLayerRelease(150);
+              }, 140);
+              return;
+            }
           }
         }
 
@@ -470,9 +494,10 @@ export class ScoreReader {
           // 竖屏单页：左右撑满视口，最大化放大乐谱音符与细节
           pageWidth = Math.max(340, vpWidth - 16);
         } else {
-          // 横屏单页：按视口可用高度与宽高比最佳填充，保证整页全景清晰展现
-          const idealWidthByHeight = Math.floor((vpHeight - 20) * 0.73);
-          pageWidth = Math.min(Math.max(idealWidthByHeight, 680), vpWidth - 32);
+          // 横屏单页：以视口可用高度为基准自适应，确保整页乐谱从头到尾 100% 完整可见
+          const availableHeight = Math.max(300, vpHeight - 24);
+          const idealWidthByHeight = Math.floor(availableHeight * 0.707); // 乐谱 A4 标准黄金比例
+          pageWidth = Math.min(Math.max(idealWidthByHeight, 360), vpWidth - 32);
         }
 
         const pageEl = await this.createPageElement(this.currentPage, pageWidth);
@@ -483,6 +508,12 @@ export class ScoreReader {
       // 将构建好的新舞台无缝交叉淡入替换到主容器
       this.applyNewStage(newStage, smoothTransition);
       this.syncPenToolToRenderers();
+
+      // 在单页/双页模式下切换页面后，自动将视口平滑复位到顶部
+      if (mode !== 'scroll' && this.viewportEl) {
+        this.viewportEl.scrollTop = 0;
+        this.viewportEl.scrollLeft = 0;
+      }
 
       // 在连续滚动模式下，自动平滑就位到当前页
       if (mode === 'scroll' && this.currentPage > 0) {
