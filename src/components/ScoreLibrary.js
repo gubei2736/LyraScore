@@ -184,7 +184,6 @@ export class ScoreLibrary {
             </button>
 
             <div class="search-bar-box">
-              <span class="search-icon">🔍</span>
               <input type="text" class="search-input" id="scoreSearchInput" placeholder="搜索乐谱标题、作曲家或标签...">
             </div>
 
@@ -195,11 +194,6 @@ export class ScoreLibrary {
               <button class="filter-pill ${this.selectedFormat === 'xml' ? 'active' : ''}" data-format="xml">MusicXML</button>
               <button class="filter-pill ${this.selectedFormat === 'image' ? 'active' : ''}" data-format="image">图片</button>
             </div>
-
-            <!-- 批量管理入口按钮 -->
-            <button class="btn btn-sm btn-outline batch-entry-btn" id="btnEnterBatchMode" title="进入多选批量管理模式">
-              <span>☑️</span> 批量管理
-            </button>
           </header>
 
           <!-- 批量多选管理悬浮操作条 -->
@@ -323,10 +317,6 @@ export class ScoreLibrary {
       if (files.length > 0) {
         await this.handleImportFiles(files);
       }
-    });
-
-    this.container.querySelector('#btnEnterBatchMode')?.addEventListener('click', () => {
-      this.enterBatchMode();
     });
 
     this.container.querySelector('#btnBatchCancel')?.addEventListener('click', () => {

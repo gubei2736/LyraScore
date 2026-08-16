@@ -263,17 +263,12 @@
 .search-bar-box {
   display: flex;
   align-items: center;
-  gap: 8px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-full);
-  padding: 6px 14px;
+  padding: 6px 16px;
   flex: 1;
   max-width: 480px;
-}
-.search-icon {
-  font-size: 14px;
-  color: var(--text-muted);
 }
 .search-input {
   border: none;
