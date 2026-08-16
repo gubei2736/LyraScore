@@ -79,11 +79,10 @@ export class ScoreViewer {
               <span class="zoom-pct-display" id="zoomLabel" title="点击一键复位为 100%">100%</span>
             </div>
 
-            <!-- 排版模式切换 (单页 / 双页 / 连续滚动) -->
-            <div class="layout-toggle-group">
+            <!-- 排版模式切换 (单页 / 双页，仅横屏显示) -->
+            <div class="layout-toggle-group" id="layoutToggleGroup">
               <button class="icon-toggle-btn active" data-layout="single" title="单页模式">📄</button>
               <button class="icon-toggle-btn" data-layout="double" id="btnDoublePage" title="双页并排模式 (仅横屏可用)">📖</button>
-              <button class="icon-toggle-btn" data-layout="scroll" id="btnScrollPage" title="连续纵向滚动模式">📜</button>
             </div>
 
             <!-- 主题切换 (纯汉字无图标) -->
@@ -121,6 +120,7 @@ export class ScoreViewer {
     `;
 
     this.bindEvents();
+    this.initOrientationWatcher();
   }
 
   initReader() {
@@ -159,20 +159,24 @@ export class ScoreViewer {
   initOrientationWatcher() {
     const checkOrientation = () => {
       const isLandscape = window.innerWidth > window.innerHeight;
+      const layoutGroup = this.container.querySelector('#layoutToggleGroup');
       const btnDouble = this.container.querySelector('#btnDoublePage');
-      if (btnDouble) {
+
+      if (layoutGroup) {
         if (!isLandscape) {
-          btnDouble.classList.add('disabled-btn');
-          btnDouble.setAttribute('title', '双页模式仅在横屏下可用');
-          if (appState.get('layoutMode') === 'double') {
+          // 竖屏状态下彻底隐藏排版切换控件（默认单页自适应）
+          layoutGroup.style.display = 'none';
+          if (appState.get('layoutMode') === 'double' && this.reader) {
             this.reader.setLayoutMode('single');
             this.container.querySelectorAll('.layout-toggle-group button').forEach(b => {
               b.classList.toggle('active', b.dataset.layout === 'single');
             });
           }
         } else {
-          btnDouble.classList.remove('disabled-btn');
-          btnDouble.setAttribute('title', '双页并排模式');
+          // 横屏状态下显示单页/双页切换器
+          layoutGroup.style.display = 'flex';
+          btnDouble?.classList.remove('disabled-btn');
+          btnDouble?.setAttribute('title', '双页并排模式');
         }
       }
     };

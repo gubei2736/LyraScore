@@ -913,9 +913,9 @@
     border-radius: var(--radius-sm);
   }
 
-  /* 竖屏下仅保留单页与连续滚动模式，双页模式自动禁用 */
+  /* 竖屏状态下彻底隐藏单页/双页切换按钮组 */
   .layout-toggle-group {
-    display: flex;
+    display: none !important;
   }
 
   /* 紧凑标题与按钮 */
